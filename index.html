@@ -9,14 +9,16 @@
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, doc, setDoc, collection, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // FIXME: 본인의 Firebase 프로젝트 설정값으로 변경하세요!
+    // 연동해주신 실제 Firebase 설정값 적용 완료!
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_STORAGE_BUCKET",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyBgA0Pi_wRXAW4cTbDDybkJtJtJWBcft1c",
+      authDomain: "pppp-2272a.firebaseapp.com",
+      databaseURL: "https://pppp-2272a-default-rtdb.firebaseio.com",
+      projectId: "pppp-2272a",
+      storageBucket: "pppp-2272a.firebasestorage.app",
+      messagingSenderId: "907802161105",
+      appId: "1:907802161105:web:343ac82c0db32d8c863af0",
+      measurementId: "G-X3Z4QD6RFC"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -175,13 +177,11 @@
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'ko-KR';
-      utterance.rate = 1.1; // 읽는 속도를 약간 빠르게 상향
+      utterance.rate = 1.1; 
       window.speechSynthesis.speak(utterance);
     }
 
-    /* ==========================================
-       [핵심 수정] 로딩 프로세스 및 미리 문제 생성
-       ========================================== */
+    /* 로딩 프로세스 및 미리 문제 생성 */
     function prepareGame() {
       if(selectedSubjects.length === 0) {
         return alert('최소 1개 이상의 과목을 선택해주세요!');
@@ -194,11 +194,10 @@
       
       barFill.style.width = '0%';
       
-      // 1단계 시뮬레이션: 문제 수집 및 제작
       setTimeout(() => {
-        statusText.innerText = "⚙️ 과목별 문제 템플릿 제작 중...";
+        statusText.innerText = "⚙️ 문제 제작 중...";
         subtext.innerText = `선택된 과목: ${selectedSubjects.join(', ')}`;
-        barFill.style.width = '35%';
+        barFill.style.width = '45%';
 
         let pool = [];
         selectedSubjects.forEach(sub => {
@@ -206,28 +205,24 @@
           pool = pool.concat(items);
         });
 
-        // 2단계 시뮬레이션: 20문항 추출 및 랜덤 배치(셔플)
         setTimeout(() => {
-          statusText.innerText = "🔀 20문항 추출 및 무작위 랜덤 배치 중...";
-          subtext.innerText = "완벽한 스피드 게임을 위해 배치를 완전히 꼬는 중입니다.";
-          barFill.style.width = '75%';
+          statusText.innerText = "🔀 랜덤 배치 중...";
+          subtext.innerText = "문제를 무작위로 혼합하고 있습니다.";
+          barFill.style.width = '85%';
 
           pool.sort(() => Math.random() - 0.5);
           gameQuizzes = [];
           for(let i=0; i<20; i++) {
             gameQuizzes.push(pool[i % pool.length]);
           }
-          // 전체 다시 셔플하여 완벽히 순서 섞기 (런타임 도중 계산 차단)
           gameQuizzes.sort(() => Math.random() - 0.5);
 
-          // 3단계 시뮬레이션: 완료 및 게임룸 진입
           setTimeout(() => {
             statusText.innerText = "✅ 준비 완료!";
-            subtext.innerText = "게임방으로 진입합니다!";
+            subtext.innerText = "게임룸으로 입장합니다!";
             barFill.style.width = '100%';
 
             setTimeout(() => {
-              // 초기화 후 진짜 인게임 시작
               currentQuizIdx = 0;
               totalScore = 0;
               correctCount = 0;
@@ -240,9 +235,6 @@
       }, 800);
     }
 
-    /* ==========================================
-       인게임 구동 로직 (이미 다 배치된 상태에서 인덱스만 호출)
-       ========================================== */
     function renderQuiz() {
       if(currentQuizIdx >= 20) {
         endGame();
@@ -266,7 +258,6 @@
         optionsDiv.appendChild(btn);
       });
 
-      // 문제 음성 재생
       speakText(`${quiz.subject} 문제입니다. ${quiz.q}`);
       startTimer();
     }
@@ -305,9 +296,7 @@
       setTimeout(renderQuiz, 400);
     }
 
-    /* ==========================================
-       Firebase Auth & Firestore 백엔드 바인딩
-       ========================================== */
+    /* Firebase 리스너 및 이벤트 */
     setTimeout(() => {
       window.fbAuth.onAuthStateChanged(user => {
         if (user) {
@@ -334,7 +323,7 @@
       if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
       try {
         await window.signUp(window.fbAuth, email, pw);
-        alert('회원가입 완료!');
+        alert('회원가입 완료! 자동 로그인됩니다.');
       } catch(e) { alert('회원가입 실패: ' + e.message); }
     }
 
