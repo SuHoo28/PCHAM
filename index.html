@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI 스피드 퀴즈 챌린지 (구글 앱스 스크립트 연동)</title>
+  <title>AI 스피드 퀴즈 챌린지 (구글 앱스 스크립트 연동 완료)</title>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -108,11 +108,11 @@
   </div>
 
   <div id="view-loading" class="card hidden">
-    <h2 id="loading-status">앱 스크립트 서버에 연결 중...</h2>
+    <h2 id="loading-status">구글 앱 스크립트 호출 중...</h2>
     <div class="bar-container">
       <div id="loadingBarFill" class="bar-fill"></div>
     </div>
-    <p style="color: #666; font-size: 14px;" id="loading-subtext">서버 내부의 AI가 문제를 맞춤 제작하고 있습니다.</p>
+    <p style="color: #666; font-size: 14px;" id="loading-subtext">서버에 숨겨진 Gemini AI가 새로운 20문제를 조합하고 있습니다.</p>
   </div>
 
   <div id="view-game" class="card hidden">
@@ -139,7 +139,7 @@
   </div>
 
   <script>
-    // 🔗 본인의 실제 구글 앱스 스크립트 배포 주소(Web App URL)를 여기에 넣어주세요!
+    // 🔗 [필수 고치기] 본인의 실제 구글 앱스 스크립트 웹 앱 배포 URL 주소를 적어주세요!
     const GAS_WEB_APP_URL = "YOUR_GAS_WEB_APP_URL_HERE"; 
 
     let currentUser = null;
@@ -168,15 +168,14 @@
       window.speechSynthesis.speak(utterance);
     }
 
-    /* ==========================================
-       [핵심 변경] 구글 앱스 스크립트(GAS) 서버 호출 및 문제 수신 엔진
-       ========================================== */
+    /* 구글 앱스 스크립트 호출형 문제 준비 로직 (옛날 검증 로직 제거 완료) */
     async function prepareGame() {
       if(selectedSubjects.length === 0) {
         return alert('최소 1개 이상의 과목을 선택해주세요!');
       }
-      if(GAS_WEB_APP_URL === "YOUR_GAS_WEB_APP_URL_HERE") {
-        return alert('코드 상단의 GAS_WEB_APP_URL 변수에 실제 구글 앱스 스크립트 배포 주소를 입력해주세요!');
+      // 옛날 Gemini API 키 확인 조건문을 삭제하고, GAS URL 주소가 잘 채워졌는지만 점검합니다.
+      if(GAS_WEB_APP_URL === "YOUR_GAS_WEB_APP_URL_HERE" || GAS_WEB_APP_URL === "") {
+        return alert('코드 상단의 GAS_WEB_APP_URL 변수에 본인의 실제 구글 앱스 스크립트 배포 주소를 입력해주세요!');
       }
 
       showView('view-loading');
@@ -186,35 +185,32 @@
       
       barFill.style.width = '25%';
       statusText.innerText = "📡 앱 스크립트에 파라미터 전송 중...";
-      subtext.innerText = `선택 과목: ${selectedSubjects.join(', ')}`;
+      subtext.innerText = `선택 과목 [ ${selectedSubjects.join(', ')} ] 데이터를 안전하게 전달 중`;
 
       try {
-        setTimeout(() => { barFill.style.width = '55%'; statusText.innerText = "⚡ 서버 내부에서 Gemini AI 작동 중..."; }, 800);
+        setTimeout(() => { barFill.style.width = '55%'; statusText.innerText = "⚡ 서버 내부에서 Gemini AI 연동 중..."; }, 800);
 
-        // 앱스 스크립트 API로 선택한 과목 전달 (POST 혹은 GET 방식에 맞춰 호출)
-        // 여기서는 일반적인 URL 파라미터(GET) 전달 방식으로 세팅했습니다.
+        // 앱스 스크립트 엔드포인트 호출
         const response = await fetch(`${GAS_WEB_APP_URL}?subjects=${encodeURIComponent(selectedSubjects.join(','))}`);
         
         if (!response.ok) throw new Error("서버 응답 상태 이상");
         
         const data = await response.json();
-        
-        // 구글 앱스 스크립트에서 받아온 20문제 데이터 장착
         gameQuizzes = data;
 
         if (!Array.isArray(gameQuizzes) || gameQuizzes.length === 0) {
-          throw new Error("서버로부터 유효한 문제 데이터를 받지 못했습니다.");
+          throw new Error("서버로부터 유효한 문제 데이터를 수신하지 못했습니다.");
         }
 
         barFill.style.width = '85%';
-        statusText.innerText = "🔀 20문항 실시간 패키징 및 배치 완료!";
+        statusText.innerText = "🔀 20문항 실시간 패키징 및 셔플 완료!";
 
-        // 문제 배열 셔플 무작위 배정
+        // 받아온 문제 섞기
         gameQuizzes.sort(() => Math.random() - 0.5);
 
         setTimeout(() => {
           barFill.style.width = '100%';
-          statusText.innerText = "✅ 준비 완료!";
+          statusText.innerText = "✅ 모든 준비 완료!";
           
           setTimeout(() => {
             currentQuizIdx = 0;
@@ -227,7 +223,7 @@
 
       } catch (error) {
         console.error("GAS 통신 실패:", error);
-        alert("앱 스크립트 서버에서 문제를 가져오는 데 실패했습니다.\n네트워크 상태나 GAS 배포 설정을 확인해 주세요.");
+        alert("앱 스크립트 서버에서 문제를 가져오는 데 실패했습니다.\n오류내용: " + error.message);
         goLobby();
       }
     }
@@ -292,7 +288,6 @@
       const feedbackContainer = document.getElementById('feedback-container');
       let earnedScore = 0;
 
-      // 정답인 경우 숫자형이나 문자열형 모두 매칭되도록 처리
       if(String(chosenIdx) === String(quiz.a)) {
         const bonus = Math.max(0, Math.round((LIMIT_TIME - elapsed) * 5));
         earnedScore = 100 + bonus;
@@ -302,7 +297,6 @@
         document.getElementById(`opt-btn-${chosenIdx}`).classList.add('correct-flash');
         feedbackContainer.innerHTML = `<div class="score-popup plus">+${earnedScore}점!</div>`;
       } 
-      // 오답인 경우
       else {
         if(chosenIdx !== -1) {
           document.getElementById(`opt-btn-${chosenIdx}`).classList.add('wrong-flash');
@@ -319,7 +313,7 @@
       setTimeout(renderQuiz, 800);
     }
 
-    /* Firebase 리스너 */
+    /* Firebase 리스너 세팅 */
     setTimeout(() => {
       window.fbAuth.onAuthStateChanged(user => {
         if (user) {
