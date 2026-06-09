@@ -9,7 +9,7 @@
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, doc, setDoc, collection, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 연동해주신 실제 Firebase 설정값 적용 완료!
+    // 요청하신 최신 Firebase 설정값으로 완벽하게 교체 완료되었습니다!
     const firebaseConfig = {
       apiKey: "AIzaSyBgA0Pi_wRXAW4cTbDDybkJtJtJWBcft1c",
       authDomain: "pppp-2272a.firebaseapp.com",
@@ -17,14 +17,15 @@
       projectId: "pppp-2272a",
       storageBucket: "pppp-2272a.firebasestorage.app",
       messagingSenderId: "907802161105",
-      appId: "1:907802161105:web:343ac82c0db32d8c863af0",
-      measurementId: "G-X3Z4QD6RFC"
+      appId: "1:907802161105:web:64237b2412c84e74863af0",
+      measurementId: "G-PFMCL1CW13"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
 
+    // 전역 스코프 바인딩
     window.fbAuth = auth;
     window.fbDb = db;
     window.signIn = signInWithEmailAndPassword;
@@ -51,12 +52,12 @@
     .secondary-btn { background: #6c757d; }
     .secondary-btn:hover { background: #5a6268; }
     
-    /* 과목 선택 버튼 */
+    /* 과목 선택 그리드 */
     .subject-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0; }
     .subject-btn { padding: 15px; background: #e9ecef; color: #495057; border: 2px solid transparent; border-radius: 10px; font-weight: bold; cursor: pointer; }
     .subject-btn.active { background: #e8f4fd; color: #1a73e8; border-color: #1a73e8; }
     
-    /* 타이머 및 로딩바 공통 공정 */
+    /* 인게임 바 타이머 및 로딩바 */
     .bar-container { width: 100%; background: #eee; height: 12px; border-radius: 6px; margin: 20px 0; overflow: hidden; position: relative; }
     .bar-fill { background: #dc3545; width: 100%; height: 100%; transition: width 0.1s linear; }
     #loadingBarFill { background: #28a745; width: 0%; transition: width 0.2s ease-out; }
@@ -125,7 +126,7 @@
 
   <script>
     /* ==========================================
-       샘플 문제 풀 데이터
+       고1 ~ 고3 수준 샘플 문제 뱅크
        ========================================== */
     const quizBank = {
       '국어': [
@@ -164,7 +165,7 @@
     
     let timerInterval = null;
     let quizStartTime = 0;
-    const LIMIT_TIME = 60;
+    const LIMIT_TIME = 60; // 문제당 1분 제한
 
     function showView(viewId) {
       ['view-auth', 'view-lobby', 'view-loading', 'view-game', 'view-result'].forEach(id => {
@@ -173,6 +174,7 @@
       document.getElementById(viewId).classList.remove('hidden');
     }
 
+    // 무료 무제한 브라우저 자체 TTS 재생 기능
     function speakText(text) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -181,7 +183,7 @@
       window.speechSynthesis.speak(utterance);
     }
 
-    /* 로딩 프로세스 및 미리 문제 생성 */
+    /* 대기실에서 게임 진입 시 동기식 로딩 가동 및 문제 선제작 */
     function prepareGame() {
       if(selectedSubjects.length === 0) {
         return alert('최소 1개 이상의 과목을 선택해주세요!');
@@ -194,6 +196,7 @@
       
       barFill.style.width = '0%';
       
+      // Phase 1: 문제 제작 단계
       setTimeout(() => {
         statusText.innerText = "⚙️ 문제 제작 중...";
         subtext.innerText = `선택된 과목: ${selectedSubjects.join(', ')}`;
@@ -205,9 +208,10 @@
           pool = pool.concat(items);
         });
 
+        // Phase 2: 랜덤 배치 및 20문항 고정화
         setTimeout(() => {
           statusText.innerText = "🔀 랜덤 배치 중...";
-          subtext.innerText = "문제를 무작위로 혼합하고 있습니다.";
+          subtext.innerText = "문제를 무작위로 혼합하고 완전히 고정하는 중입니다.";
           barFill.style.width = '85%';
 
           pool.sort(() => Math.random() - 0.5);
@@ -215,11 +219,13 @@
           for(let i=0; i<20; i++) {
             gameQuizzes.push(pool[i % pool.length]);
           }
+          // 전체 순서 2차 셔플 진행
           gameQuizzes.sort(() => Math.random() - 0.5);
 
+          // Phase 3: 진입 준비 완료
           setTimeout(() => {
             statusText.innerText = "✅ 준비 완료!";
-            subtext.innerText = "게임룸으로 입장합니다!";
+            subtext.innerText = "게임룸으로 바로 입장합니다!";
             barFill.style.width = '100%';
 
             setTimeout(() => {
@@ -258,6 +264,7 @@
         optionsDiv.appendChild(btn);
       });
 
+      // 새로운 문제가 출제되면 TTS가 자동으로 읽어줌
       speakText(`${quiz.subject} 문제입니다. ${quiz.q}`);
       startTimer();
     }
@@ -274,11 +281,12 @@
 
         if(elapsed >= LIMIT_TIME) {
           clearInterval(timerInterval);
-          handleAnswer(-1);
+          handleAnswer(-1); // 시간 제한 마감 시 오답
         }
       }, 100);
     }
 
+    // 시간 비례형 스코어 알고리즘
     function handleAnswer(chosenIdx) {
       clearInterval(timerInterval);
       window.speechSynthesis.cancel();
@@ -287,6 +295,7 @@
       const elapsed = (Date.now() - quizStartTime) / 1000;
 
       if(chosenIdx === quiz.a) {
+        // 정답 시 기본 100점 + (남은 시간 초 * 5) 보너스 가산 구조
         const bonus = Math.max(0, Math.round((LIMIT_TIME - elapsed) * 5));
         totalScore += (100 + bonus);
         correctCount++;
@@ -296,7 +305,9 @@
       setTimeout(renderQuiz, 400);
     }
 
-    /* Firebase 리스너 및 이벤트 */
+    /* ==========================================
+       Firebase 연결 상태 정의 및 유저 트래킹
+       ========================================== */
     setTimeout(() => {
       window.fbAuth.onAuthStateChanged(user => {
         if (user) {
@@ -313,17 +324,17 @@
     async function handleLogin() {
       const email = document.getElementById('auth-email').value;
       const pw = document.getElementById('auth-pw').value;
-      if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
+      if(!email || !pw) return alert('이메일과 비밀번호를 모두 입력해 주세요.');
       try { await window.signIn(window.fbAuth, email, pw); } catch(e) { alert('로그인 실패: ' + e.message); }
     }
 
     async function handleSignUp() {
       const email = document.getElementById('auth-email').value;
       const pw = document.getElementById('auth-pw').value;
-      if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
+      if(!email || !pw) return alert('이메일과 비밀번호를 모두 입력해 주세요.');
       try {
         await window.signUp(window.fbAuth, email, pw);
-        alert('회원가입 완료! 자동 로그인됩니다.');
+        alert('회원가입 완료! 자동으로 로그인 대기실로 이동합니다.');
       } catch(e) { alert('회원가입 실패: ' + e.message); }
     }
 
@@ -349,7 +360,7 @@
             correct: correctCount,
             updatedAt: Date.now()
           });
-        } catch(e) { console.error("랭킹 등록 실패:", e); }
+        } catch(e) { console.error("랭킹 테이블 업데이트 에러:", e); }
       }
     }
 
