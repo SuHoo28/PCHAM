@@ -1,354 +1,391 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI TTS 음성 변환기</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 스피드 퀴즈 챌린지</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, doc, setDoc, collection, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // FIXME: 본인의 Firebase 프로젝트 설정값으로 변경하세요!
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.fbAuth = auth;
+    window.fbDb = db;
+    window.signIn = signInWithEmailAndPassword;
+    window.signUp = createUserWithEmailAndPassword;
+    window.logOut = signOut;
+    window.dbDoc = doc;
+    window.dbSet = setDoc;
+    window.dbCollection = collection;
+    window.dbQuery = query;
+    window.dbOrderBy = orderBy;
+    window.dbLimit = limit;
+    window.dbOnSnapshot = onSnapshot;
+  </script>
+
   <style>
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: linear-gradient(135deg, #e3f2fd, #fce4ec);
-      font-family: Arial, sans-serif;
-      color: #333;
-    }
-
-    .container {
-      width: min(900px, 92%);
-      margin: 40px auto;
-      background: #ffffff;
-      border-radius: 24px;
-      padding: 28px;
-      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.16);
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      text-align: center;
-      font-size: 28px;
-    }
-
-    .subtitle {
-      text-align: center;
-      color: #777;
-      margin-bottom: 24px;
-      font-size: 14px;
-    }
-
-    .info {
-      padding: 14px;
-      margin-bottom: 20px;
-      border-radius: 14px;
-      background: #e8f5e9;
-      color: #2e7d32;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-
-    .option-box {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-
-    select, input {
-      height: 44px;
-      padding: 0 12px;
-      border: 1px solid #ddd;
-      border-radius: 12px;
-      font-size: 14px;
-      outline: none;
-    }
-
-    textarea {
-      width: 100%;
-      min-height: 180px;
-      resize: vertical;
-      padding: 16px;
-      border: 1px solid #ddd;
-      border-radius: 16px;
-      font-size: 16px;
-      line-height: 1.5;
-      outline: none;
-      font-family: Arial, sans-serif;
-    }
-
-    textarea:focus, select:focus, input:focus {
-      border-color: #42a5f5;
-      box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.15);
-    }
-
-    .label {
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    .button-row {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-      margin-top: 14px;
-    }
-
-    button, .download-link {
-      border: none;
-      border-radius: 12px;
-      padding: 0 18px;
-      height: 46px;
-      font-size: 15px;
-      cursor: pointer;
-      transition: 0.15s;
-      font-weight: bold;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    button:hover, .download-link:hover {
-      transform: translateY(-2px);
-      opacity: 0.9;
-    }
-
-    button:disabled {
-      cursor: not-allowed;
-      opacity: 0.6;
-      transform: none;
-    }
-
-    .make-btn {
-      background: #42a5f5;
-      color: white;
-    }
-
-    .clear-btn {
-      background: #b0bec5;
-      color: white;
-    }
-
-    .download-link {
-      background: #7e57c2;
-      color: white;
-    }
-
-    .hidden { display: none; }
-
-    .status {
-      min-height: 24px;
-      margin-top: 14px;
-      color: #555;
-      font-size: 14px;
-    }
-
-    .result-box {
-      margin-top: 20px;
-      padding: 18px;
-      border-radius: 18px;
-      background: #f7f9fb;
-      border: 1px solid #edf1f5;
-    }
-
-    audio {
-      width: 100%;
-      margin-top: 10px;
-    }
-
-    .help {
-      margin-top: 12px;
-      font-size: 13px;
-      color: #777;
-      line-height: 1.6;
-    }
-
-    @media (max-width: 700px) {
-      .option-box { grid-template-columns: 1fr; }
-      .button-row { justify-content: stretch; }
-      button, .download-link { width: 100%; }
-    }
+    * { box-sizing: border-box; font-family: 'Malgun Gothic', sans-serif; }
+    body { background: #f0f2f5; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 600px; text-align: center; }
+    .hidden { display: none !important; }
+    h2 { margin-top: 0; color: #333; }
+    input[type="email"], input[type="password"] { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+    button { width: 100%; padding: 12px; background: #4A90E2; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+    button:hover { background: #357ABD; }
+    .secondary-btn { background: #6c757d; }
+    .secondary-btn:hover { background: #5a6268; }
+    
+    /* 과목 선택 버튼 */
+    .subject-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0; }
+    .subject-btn { padding: 15px; background: #e9ecef; color: #495057; border: 2px solid transparent; border-radius: 10px; font-weight: bold; cursor: pointer; }
+    .subject-btn.active { background: #e8f4fd; color: #1a73e8; border-color: #1a73e8; }
+    
+    /* 타이머 및 로딩바 공통 공정 */
+    .bar-container { width: 100%; background: #eee; height: 12px; border-radius: 6px; margin: 20px 0; overflow: hidden; position: relative; }
+    .bar-fill { background: #dc3545; width: 100%; height: 100%; transition: width 0.1s linear; }
+    #loadingBarFill { background: #28a745; width: 0%; transition: width 0.2s ease-out; }
+    
+    .quiz-text { font-size: 20px; font-weight: bold; margin-bottom: 20px; word-break: keep-all; min-height: 60px; }
+    .option-btn { text-align: left; background: #f8f9fa; color: #333; border: 1px solid #ddd; margin-bottom: 8px; }
+    .option-btn:hover { background: #e2e6ea; }
+    
+    .ranking-list { text-align: left; margin: 20px 0; padding: 0; list-style: none; }
+    .ranking-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; font-size: 16px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>AI TTS 음성 변환기</h1>
-    <div class="subtitle">텍스트를 AI 음성 mp3 파일로 변환합니다</div>
 
-    <div class="info">
-      현재 구조: GitHub Pages 화면 → Google Apps Script 서버 → OpenAI TTS API → mp3 음성 반환<br />
-      API Key는 index.html에 들어가지 않고 Apps Script의 스크립트 속성에 저장됩니다.
+  <div id="view-auth" class="card">
+    <h2>로그인 / 회원가입</h2>
+    <input type="email" id="auth-email" placeholder="이메일 주소">
+    <input type="password" id="auth-pw" placeholder="비밀번호 (6자리 이상)">
+    <button onclick="handleLogin()">로그인</button>
+    <button onclick="handleSignUp()" class="secondary-btn">신규 회원가입</button>
+  </div>
+
+  <div id="view-lobby" class="card hidden">
+    <h2>퀴즈 과목 선택</h2>
+    <p>문제를 풀 과목을 선택하세요 (최소 1개 이상 다중 선택 가능)</p>
+    <div class="subject-grid">
+      <button class="subject-btn" onclick="toggleSubject(this, '국어')">국어</button>
+      <button class="subject-btn" onclick="toggleSubject(this, '수학')">수학</button>
+      <button class="subject-btn" onclick="toggleSubject(this, '과학')">과학</button>
+      <button class="subject-btn" onclick="toggleSubject(this, '사회')">사회</button>
+      <button class="subject-btn" onclick="toggleSubject(this, '영어')">영어</button>
     </div>
+    <button onclick="prepareGame()" style="background: #28a745;">게임 시작 (총 20문항)</button>
+    <button onclick="handleLogout()" class="secondary-btn" style="margin-top: 20px;">로그아웃</button>
+  </div>
 
-    <div class="option-box">
-      <select id="modelSelect">
-        <option value="tts-1">tts-1 빠른 생성</option>
-        <option value="tts-1-hd">tts-1-hd 고품질</option>
-      </select>
-
-      <select id="voiceSelect">
-        <option value="alloy">alloy</option>
-        <option value="echo">echo</option>
-        <option value="fable">fable</option>
-        <option value="onyx">onyx</option>
-        <option value="nova">nova</option>
-        <option value="shimmer">shimmer</option>
-      </select>
-
-      <input id="speedInput" type="number" min="0.25" max="4.0" step="0.05" value="1.0" placeholder="속도" />
+  <div id="view-loading" class="card hidden">
+    <h2 id="loading-status">AI 문제 데이터 요청 중...</h2>
+    <div class="bar-container">
+      <div id="loadingBarFill" class="bar-fill"></div>
     </div>
+    <p style="color: #666; font-size: 14px;" id="loading-subtext">잠시만 기다려주세요.</p>
+  </div>
 
-    <div>
-      <div class="label">변환할 텍스트</div>
-      <textarea id="textInput" placeholder="음성으로 바꿀 문장을 입력하세요. 예: 안녕하세요. 오늘은 Firebase와 OpenAI API를 활용한 웹페이지 제작을 배워보겠습니다."></textarea>
+  <div id="view-game" class="card hidden">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold;">
+      <span id="quiz-progress">1 / 20</span>
+      <span id="quiz-score">점수: 0점</span>
     </div>
+    <div class="bar-container"><div id="timerBar" class="bar-fill"></div></div>
+    <div style="font-size: 14px; color: #888; margin-bottom: 5px;" id="quiz-subject">[과목]</div>
+    <div class="quiz-text" id="quiz-question">문제가 여기에 표시됩니다.</div>
+    <div id="quiz-options"></div>
+    <button onclick="speakText(document.getElementById('quiz-question').innerText)" class="secondary-btn" style="font-size: 14px; padding: 6px; margin-top: 15px;">🔊 문제 다시 듣기</button>
+  </div>
 
-    <div class="button-row">
-      <button class="clear-btn" id="clearBtn">초기화</button>
-      <button class="make-btn" id="makeBtn">음성 만들기</button>
-    </div>
-
-    <div id="status" class="status"></div>
-
-    <div id="resultBox" class="result-box hidden">
-      <div class="label">생성된 음성</div>
-      <audio id="audioPlayer" controls></audio>
-      <div class="button-row">
-        <a id="downloadLink" class="download-link" href="#" download="tts-audio.mp3">mp3 다운로드</a>
-      </div>
-    </div>
-
-    <div class="help">
-      긴 문장은 생성 시간이 오래 걸릴 수 있습니다. 처음에는 짧은 문장으로 테스트해보세요.<br />
-      속도는 0.25부터 4.0까지 조절할 수 있습니다.
-    </div>
+  <div id="view-result" class="card hidden">
+    <h2>🎉 게임 종료!</h2>
+    <h1 id="final-score" style="color: #4A90E2; margin: 10px 0;">0점</h1>
+    <p id="game-summary">20문제 중 X문제를 맞추셨습니다!</p>
+    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
+    <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
+    <ul id="ranking-board" class="ranking-list"></ul>
+    <button onclick="goLobby()" style="background: #e67e22;">다시 도전하기</button>
   </div>
 
   <script>
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxzvCeCidpIBm3Ez_AbmzTRrvzCkPa_7x-irAazDPzljPmuqjjHZOqXxfyS1vNh7tX1/exec';
+    /* ==========================================
+       샘플 문제 풀 데이터
+       ========================================== */
+    const quizBank = {
+      '국어': [
+        { q: "다음 중 표준어가 아닌 것은 무엇일까요?", o: ["설렁탕", "자장면", "구라치다", "끄적이다"], a: 2 },
+        { q: "시 '진달래꽃'의 작가는 누구일까요?", o: ["김소월", "윤동주", "이육사", "한용운"], a: 0 },
+        { q: "사자성어 '구사일생'의 뜻으로 올바른 것은?", o: ["아홉 번 살고 한 번 죽는다", "죽을 고비를 넘기고 겨우 살아남음", "처음부터 끝까지 한결같음", "말을 조심해야 한다"], a: 1 }
+      ],
+      '수학': [
+        { q: "다항식 x² - 4를 인수분해하면 어떻게 될까요?", o: ["(x-2)(x-2)", "(x+2)(x-2)", "(x+4)(x-1)", "인수분해 불가능"], a: 1 },
+        { q: "로그 계산 기호 log₂8 의 값은 얼마일까요?", o: ["2", "3", "4", "8"], a: 1 },
+        { q: "두 직선이 서로 평행할 때 두 직선의 기울기는?", o: ["서로 같다", "곱해서 -1이 된다", "서로 다르다", "알 수 없다"], a: 0 }
+      ],
+      '과학': [
+        { q: "물(H₂O) 분자 한 개에 들어있는 수소 원자의 개수는?", o: ["1개", "2개", "3개", "4개"], a: 1 },
+        { q: "뉴턴의 운동 제2법칙을 나타내는 공식은?", o: ["F = ma", "E = mc²", "V = IR", "P = mv"], a: 0 },
+        { q: "우리 몸에서 인슐린을 분비하여 혈당을 조절하는 기관은?", o: ["간", "위", "이자(췌장)", "소장"], a: 2 }
+      ],
+      '사회': [
+        { q: "대한민국의 헌법 제1조 1항은 무엇일까요?", o: ["대한민국은 민주공화국이다", "대한민국의 주권은 국민에게 있다", "모든 국민은 법 앞에 평등하다", "국가는 국민을 보호한다"], a: 0 },
+        { q: "기회비용의 정의로 올바른 것은?", o: ["실제 지출된 비용", "선택으로 인해 포기한 가치 중 가장 큰 것", "공짜로 얻은 이익", "생산에 필요한 최소 비용"], a: 1 },
+        { q: "조선 시대 최고의 법전이었던 책의 이름은?", o: ["삼국유사", "경국대전", "조선왕조실록", "목민심서"], a: 1 }
+      ],
+      '영어': [
+        { q: "다음 중 '망설이다, 주저하다'라는 뜻을 가진 영단어는?", o: ["Heresy", "Hesitate", "Hurry", "Harvest"], a: 1 },
+        { q: "문장 'I have been to Paris.'의 올바른 해석은?", o: ["나는 파리에 가고 있다", "나는 파리에 가본 적이 있다", "나는 파리에 살았었다", "나는 파리에 가야만 한다"], a: 1 },
+        { q: "단어 'Approve'의 반대말은 무엇일까요?", o: ["Disapprove", "Unapprove", "Imapprove", "Inapprove"], a: 0 }
+      ]
+    };
 
-    const textInput = document.getElementById('textInput');
-    const modelSelect = document.getElementById('modelSelect');
-    const voiceSelect = document.getElementById('voiceSelect');
-    const speedInput = document.getElementById('speedInput');
-    const makeBtn = document.getElementById('makeBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const statusBox = document.getElementById('status');
-    const resultBox = document.getElementById('resultBox');
-    const audioPlayer = document.getElementById('audioPlayer');
-    const downloadLink = document.getElementById('downloadLink');
+    let currentUser = null;
+    let selectedSubjects = [];
+    let gameQuizzes = [];
+    let currentQuizIdx = 0;
+    let totalScore = 0;
+    let correctCount = 0;
+    
+    let timerInterval = null;
+    let quizStartTime = 0;
+    const LIMIT_TIME = 60;
 
-    makeBtn.addEventListener('click', makeSpeech);
-    clearBtn.addEventListener('click', clearPage);
+    function showView(viewId) {
+      ['view-auth', 'view-lobby', 'view-loading', 'view-game', 'view-result'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+      });
+      document.getElementById(viewId).classList.remove('hidden');
+    }
 
-    textInput.addEventListener('keydown', function(event) {
-      if (event.key === 'Enter' && event.ctrlKey) {
-        makeSpeech();
+    function speakText(text) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ko-KR';
+      utterance.rate = 1.1; // 읽는 속도를 약간 빠르게 상향
+      window.speechSynthesis.speak(utterance);
+    }
+
+    /* ==========================================
+       [핵심 수정] 로딩 프로세스 및 미리 문제 생성
+       ========================================== */
+    function prepareGame() {
+      if(selectedSubjects.length === 0) {
+        return alert('최소 1개 이상의 과목을 선택해주세요!');
       }
-    });
 
-    async function makeSpeech() {
-      const text = textInput.value.trim();
-      const model = modelSelect.value;
-      const voice = voiceSelect.value;
-      const speed = Number(speedInput.value || 1.0);
+      showView('view-loading');
+      const statusText = document.getElementById('loading-status');
+      const subtext = document.getElementById('loading-subtext');
+      const barFill = document.getElementById('loadingBarFill');
+      
+      barFill.style.width = '0%';
+      
+      // 1단계 시뮬레이션: 문제 수집 및 제작
+      setTimeout(() => {
+        statusText.innerText = "⚙️ 과목별 문제 템플릿 제작 중...";
+        subtext.innerText = `선택된 과목: ${selectedSubjects.join(', ')}`;
+        barFill.style.width = '35%';
 
-      if (!text) {
-        alert('음성으로 변환할 텍스트를 입력해주세요.');
-        return;
-      }
-
-      if (speed < 0.25 || speed > 4.0) {
-        alert('속도는 0.25부터 4.0 사이로 입력해주세요.');
-        return;
-      }
-
-      try {
-        setLoading(true);
-        resultBox.classList.add('hidden');
-        statusBox.textContent = 'Apps Script 서버에 TTS 요청을 보내는 중입니다.';
-
-        const response = await fetch(APPS_SCRIPT_URL, {
-          method: 'POST',
-          body: JSON.stringify({
-            type: 'tts',
-            text: text,
-            model: model,
-            voice: voice,
-            speed: speed
-          })
+        let pool = [];
+        selectedSubjects.forEach(sub => {
+          const items = quizBank[sub].map(q => ({...q, subject: sub}));
+          pool = pool.concat(items);
         });
 
-        const data = await response.json();
+        // 2단계 시뮬레이션: 20문항 추출 및 랜덤 배치(셔플)
+        setTimeout(() => {
+          statusText.innerText = "🔀 20문항 추출 및 무작위 랜덤 배치 중...";
+          subtext.innerText = "완벽한 스피드 게임을 위해 배치를 완전히 꼬는 중입니다.";
+          barFill.style.width = '75%';
 
-        if (data.error) {
-          throw new Error(data.error);
+          pool.sort(() => Math.random() - 0.5);
+          gameQuizzes = [];
+          for(let i=0; i<20; i++) {
+            gameQuizzes.push(pool[i % pool.length]);
+          }
+          // 전체 다시 셔플하여 완벽히 순서 섞기 (런타임 도중 계산 차단)
+          gameQuizzes.sort(() => Math.random() - 0.5);
+
+          // 3단계 시뮬레이션: 완료 및 게임룸 진입
+          setTimeout(() => {
+            statusText.innerText = "✅ 준비 완료!";
+            subtext.innerText = "게임방으로 진입합니다!";
+            barFill.style.width = '100%';
+
+            setTimeout(() => {
+              // 초기화 후 진짜 인게임 시작
+              currentQuizIdx = 0;
+              totalScore = 0;
+              correctCount = 0;
+              showView('view-game');
+              renderQuiz();
+            }, 600);
+
+          }, 1000);
+        }, 1200);
+      }, 800);
+    }
+
+    /* ==========================================
+       인게임 구동 로직 (이미 다 배치된 상태에서 인덱스만 호출)
+       ========================================== */
+    function renderQuiz() {
+      if(currentQuizIdx >= 20) {
+        endGame();
+        return;
+      }
+
+      const quiz = gameQuizzes[currentQuizIdx];
+      
+      document.getElementById('quiz-progress').innerText = `${currentQuizIdx + 1} / 20`;
+      document.getElementById('quiz-score').innerText = `점수: ${totalScore}점`;
+      document.getElementById('quiz-subject').innerText = `[${quiz.subject}]`;
+      document.getElementById('quiz-question').innerText = quiz.q;
+
+      const optionsDiv = document.getElementById('quiz-options');
+      optionsDiv.innerHTML = '';
+      quiz.o.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerText = `${idx + 1}. ${opt}`;
+        btn.onclick = () => handleAnswer(idx);
+        optionsDiv.appendChild(btn);
+      });
+
+      // 문제 음성 재생
+      speakText(`${quiz.subject} 문제입니다. ${quiz.q}`);
+      startTimer();
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      quizStartTime = Date.now();
+      const bar = document.getElementById('timerBar');
+      
+      timerInterval = setInterval(() => {
+        const elapsed = (Date.now() - quizStartTime) / 1000;
+        const remainPercent = Math.max(0, ((LIMIT_TIME - elapsed) / LIMIT_TIME) * 100);
+        bar.style.width = remainPercent + '%';
+
+        if(elapsed >= LIMIT_TIME) {
+          clearInterval(timerInterval);
+          handleAnswer(-1);
         }
+      }, 100);
+    }
 
-        if (!data.audioBase64) {
-          throw new Error('음성 데이터를 받지 못했습니다.');
+    function handleAnswer(chosenIdx) {
+      clearInterval(timerInterval);
+      window.speechSynthesis.cancel();
+
+      const quiz = gameQuizzes[currentQuizIdx];
+      const elapsed = (Date.now() - quizStartTime) / 1000;
+
+      if(chosenIdx === quiz.a) {
+        const bonus = Math.max(0, Math.round((LIMIT_TIME - elapsed) * 5));
+        totalScore += (100 + bonus);
+        correctCount++;
+      }
+
+      currentQuizIdx++;
+      setTimeout(renderQuiz, 400);
+    }
+
+    /* ==========================================
+       Firebase Auth & Firestore 백엔드 바인딩
+       ========================================== */
+    setTimeout(() => {
+      window.fbAuth.onAuthStateChanged(user => {
+        if (user) {
+          currentUser = user;
+          showView('view-lobby');
+          loadRanking();
+        } else {
+          currentUser = null;
+          showView('view-auth');
         }
+      });
+    }, 1000);
 
-        const audioUrl = base64ToAudioUrl(data.audioBase64, 'audio/mpeg');
+    async function handleLogin() {
+      const email = document.getElementById('auth-email').value;
+      const pw = document.getElementById('auth-pw').value;
+      if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
+      try { await window.signIn(window.fbAuth, email, pw); } catch(e) { alert('로그인 실패: ' + e.message); }
+    }
 
-        audioPlayer.src = audioUrl;
-        downloadLink.href = audioUrl;
-        downloadLink.download = makeFileName();
-        resultBox.classList.remove('hidden');
-        statusBox.textContent = '음성 생성 완료';
-      } catch (error) {
-        console.error(error);
-        statusBox.textContent = '요청 실패';
-        alert('오류가 발생했습니다.\n\n' + error.message);
-      } finally {
-        setLoading(false);
+    async function handleSignUp() {
+      const email = document.getElementById('auth-email').value;
+      const pw = document.getElementById('auth-pw').value;
+      if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
+      try {
+        await window.signUp(window.fbAuth, email, pw);
+        alert('회원가입 완료!');
+      } catch(e) { alert('회원가입 실패: ' + e.message); }
+    }
+
+    function handleLogout() { window.logOut(window.fbAuth); }
+
+    function toggleSubject(btn, subjectName) {
+      btn.classList.toggle('active');
+      if(btn.classList.contains('active')) { selectedSubjects.push(subjectName); } 
+      else { selectedSubjects = selectedSubjects.filter(s => s !== subjectName); }
+    }
+
+    async function endGame() {
+      showView('view-result');
+      document.getElementById('final-score').innerText = `${totalScore} 점`;
+      document.getElementById('game-summary').innerText = `20문제 중 총 ${correctCount}문제를 맞추셨습니다!`;
+
+      if(currentUser) {
+        try {
+          const nickName = currentUser.email.split('@')[0];
+          await window.dbSet(window.dbDoc(window.fbDb, "rankings", currentUser.uid), {
+            username: nickName,
+            score: totalScore,
+            correct: correctCount,
+            updatedAt: Date.now()
+          });
+        } catch(e) { console.error("랭킹 등록 실패:", e); }
       }
     }
 
-    function base64ToAudioUrl(base64, mimeType) {
-      const byteCharacters = atob(base64);
-      const byteArrays = [];
-
-      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-        const slice = byteCharacters.slice(offset, offset + 512);
-        const byteNumbers = new Array(slice.length);
-
-        for (let i = 0; i < slice.length; i++) {
-          byteNumbers[i] = slice.charCodeAt(i);
-        }
-
-        const byteArray = new Uint8Array(byteNumbers);
-        byteArrays.push(byteArray);
-      }
-
-      const blob = new Blob(byteArrays, { type: mimeType });
-      return URL.createObjectURL(blob);
+    function loadRanking() {
+      const q = window.dbQuery(window.dbCollection(window.fbDb, "rankings"), window.dbOrderBy("score", "desc"), window.dbLimit(10));
+      window.dbOnSnapshot(q, (snapshot) => {
+        const board = document.getElementById('ranking-board');
+        board.innerHTML = '';
+        let rank = 1;
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const li = document.createElement('li');
+          li.className = 'ranking-item';
+          li.innerHTML = `<span><strong>${rank}위</strong>. ${data.username}</span> <span>${data.score}점</span>`;
+          board.appendChild(li);
+          rank++;
+        });
+      });
     }
 
-    function makeFileName() {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const hour = String(now.getHours()).padStart(2, '0');
-      const minute = String(now.getMinutes()).padStart(2, '0');
-      return `tts-${year}${month}${day}-${hour}${minute}.mp3`;
-    }
-
-    function setLoading(isLoading) {
-      makeBtn.disabled = isLoading;
-      makeBtn.textContent = isLoading ? '생성 중...' : '음성 만들기';
-    }
-
-    function clearPage() {
-      textInput.value = '';
-      statusBox.textContent = '';
-      audioPlayer.removeAttribute('src');
-      downloadLink.href = '#';
-      resultBox.classList.add('hidden');
+    function goLobby() {
+      selectedSubjects = [];
+      document.querySelectorAll('.subject-btn').forEach(b => b.classList.remove('active'));
+      showView('view-lobby');
     }
   </script>
 </body>
 </html>
-
