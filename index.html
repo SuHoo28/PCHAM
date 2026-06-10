@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI 스피드 퀴즈 챌린지 (ChatGPT 앱 스크립트 연동 완료)</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 스피드 퀴즈 챌린지</title>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, doc, setDoc, collection, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Firebase 설정값
+    // Firebase 설정값 (기존 설정 유지)
     const firebaseConfig = {
       apiKey: "AIzaSyBgA0Pi_wRXAW4cTbDDybkJtJtJWBcft1c",
       authDomain: "pppp-2272a.firebaseapp.com",
@@ -40,109 +40,131 @@
   </script>
 
   <style>
-    * { box-sizing: border-box; font-family: 'Malgun Gothic', sans-serif; }
-    body { background: #f0f2f5; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-    .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 600px; text-align: center; position: relative; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: linear-gradient(135deg, #e3f2fd, #fce4ec); font-family: Arial, sans-serif; color: #333; display: flex; justify-content: center; align-items: center; padding: 20px; }
+    .container { width: min(600px, 92%); background: #ffffff; border-radius: 24px; padding: 28px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.16); text-align: center; position: relative; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .subtitle { color: #777; margin-bottom: 24px; font-size: 14px; }
+    .info { padding: 14px; margin-bottom: 20px; border-radius: 14px; background: #e8f5e9; color: #2e7d32; font-size: 14px; line-height: 1.6; text-align: left; }
     .hidden { display: none !important; }
-    h2 { margin-top: 0; color: #333; }
+    
+    /* 입력 및 버튼 */
     input[type="email"], input[type="password"] { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
-    button { width: 100%; padding: 12px; background: #4A90E2; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.2s; }
-    button:hover { background: #357ABD; }
-    .secondary-btn { background: #6c757d; }
-    .secondary-btn:hover { background: #5a6268; }
-    
+    .button-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+    button { border: none; border-radius: 12px; padding: 0 18px; height: 46px; font-size: 15px; cursor: pointer; transition: 0.15s; font-weight: bold; width: 100%; }
+    button:hover { transform: translateY(-2px); opacity: 0.9; }
+    button:disabled { cursor: not-allowed; opacity: 0.6; transform: none; }
+    .ask-btn { background: #42a5f5; color: white; }
+    .clear-btn { background: #b0bec5; color: white; }
+    .secondary-btn { background: #6c757d; color: white; }
+
+    /* 과목 그리드 */
     .subject-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0; }
-    .subject-btn { padding: 15px; background: #e9ecef; color: #495057; border: 2px solid transparent; border-radius: 10px; font-weight: bold; cursor: pointer; }
+    .subject-btn { padding: 15px; background: #e9ecef; color: #495057; border: 2px solid transparent; border-radius: 10px; font-weight: bold; cursor: pointer; height: auto; }
     .subject-btn.active { background: #e8f4fd; color: #1a73e8; border-color: #1a73e8; }
-    
+
+    /* 로딩바 및 타이머바 */
     .bar-container { width: 100%; background: #eee; height: 12px; border-radius: 6px; margin: 20px 0; overflow: hidden; position: relative; }
     .bar-fill { background: #dc3545; width: 100%; height: 100%; transition: width 0.1s linear; }
     #loadingBarFill { background: #28a745; width: 0%; transition: width 0.4s ease-out; }
-    
+
+    /* 퀴즈 UI */
     .quiz-text { font-size: 20px; font-weight: bold; margin-bottom: 20px; word-break: keep-all; min-height: 60px; }
-    
-    .option-btn { text-align: left; background: #f8f9fa; color: #333; border: 1px solid #ddd; margin-bottom: 8px; transition: all 0.2s ease; }
+    .option-btn { text-align: left; background: #f8f9fa; color: #333; border: 1px solid #ddd; margin-bottom: 8px; transition: all 0.2s ease; font-weight: normal; }
     .option-btn:hover { background: #e2e6ea; }
+    .option-btn.correct-flash { background: #28a745 !important; color: white !important; border-color: #1e7e34 !important; font-weight: bold; }
+    .option-btn.wrong-flash { background: #dc3545 !important; color: white !important; border-color: #bd2130 !important; }
     
-    /* 정답/오답 발생 시 깜빡이는 불빛 효과 */
-    .option-btn.correct-flash { background: #28a745 !important; color: white !important; border-color: #1e7e34 !important; box-shadow: 0 0 12px rgba(40,167,69,0.6); font-size: 17px; }
-    .option-btn.wrong-flash { background: #dc3545 !important; color: white !important; border-color: #bd2130 !important; box-shadow: 0 0 12px rgba(220,53,69,0.6); }
-    .option-btn:disabled { cursor: not-allowed; opacity: 0.6; }
-    .option-btn.correct-flash:disabled, .option-btn.wrong-flash:disabled { opacity: 1; }
-
-    /* 화면 중앙에 추가 점수 안내 팝업 효과 */
+    /* 팝업 효과 */
     .score-popup { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: 28px; font-weight: bold; animation: fadeUp 0.8s ease-out forwards; z-index: 10; pointer-events: none; }
-    .score-popup.plus { color: #28a745; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .score-popup.minus { color: #dc3545; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
+    .score-popup.plus { color: #28a745; }
+    .score-popup.minus { color: #dc3545; }
     @keyframes fadeUp {
       0% { opacity: 0; transform: translate(-50%, -20%) scale(0.8); }
       30% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
       100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
     }
-    
+
     .ranking-list { text-align: left; margin: 20px 0; padding: 0; list-style: none; }
-    .ranking-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; font-size: 16px; }
+    .ranking-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
+    .status { min-height: 24px; color: #555; font-size: 14px; margin: 10px 0; }
+    .help { margin-top: 12px; font-size: 13px; color: #777; text-align: left; line-height: 1.6; }
   </style>
 </head>
 <body>
+  <div class="container">
+    <h1>AI 스피드 퀴즈 챌린지</h1>
+    <div class="subtitle">GitHub Pages + Google Apps Script + OpenAI API 연동 완료</div>
 
-  <div id="view-auth" class="card">
-    <h2>로그인 / 회원가입</h2>
-    <input type="email" id="auth-email" placeholder="이메일 주소">
-    <input type="password" id="auth-pw" placeholder="비밀번호 (6자리 이상)">
-    <button onclick="handleLogin()">로그인</button>
-    <button onclick="handleSignUp()" class="secondary-btn">신규 회원가입</button>
-  </div>
-
-  <div id="view-lobby" class="card hidden">
-    <h2>퀴즈 과목 선택</h2>
-    <p>문제를 풀 과목을 선택하세요 (최소 1개 이상 다중 선택 가능)</p>
-    <div class="subject-grid">
-      <button class="subject-btn" onclick="toggleSubject(this, '국어')">국어</button>
-      <button class="subject-btn" onclick="toggleSubject(this, '수학')">수학</button>
-      <button class="subject-btn" onclick="toggleSubject(this, '과학')">과학</button>
-      <button class="subject-btn" onclick="toggleSubject(this, '사회')">사회</button>
-      <button class="subject-btn" onclick="toggleSubject(this, '영어')">영어</button>
+    <div class="info">
+      현재 구조: GitHub Pages 화면 → Google Apps Script 서버 → OpenAI API → 답변 반환<br />
+      API Key는 index.html에 들어가지 않고 Apps Script의 <strong>스크립트 속성(Property)</strong>에 저장되어 안전합니다.
     </div>
-    <button onclick="prepareGame()" style="background: #28a745;">게임 시작 (총 20문항)</button>
-    <button onclick="handleLogout()" class="secondary-btn" style="margin-top: 20px;">로그아웃</button>
-  </div>
 
-  <div id="view-loading" class="card hidden">
-    <h2 id="loading-status">구글 앱 스크립트 호출 중...</h2>
-    <div class="bar-container">
-      <div id="loadingBarFill" class="bar-fill"></div>
+    <div id="view-auth">
+      <input type="email" id="auth-email" placeholder="이메일 주소">
+      <input type="password" id="auth-pw" placeholder="비밀번호 (6자리 이상)">
+      <div class="button-row">
+        <button class="ask-btn" onclick="handleLogin()">로그인</button>
+        <button class="clear-btn" onclick="handleSignUp()">신규 회원가입</button>
+      </div>
     </div>
-    <p style="color: #666; font-size: 14px;" id="loading-subtext">새로 지정한 공개용 GAS 서버의 ChatGPT가 문제를 조합하고 있습니다.</p>
-  </div>
 
-  <div id="view-game" class="card hidden">
-    <div id="feedback-container"></div>
-    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold;">
-      <span id="quiz-progress">1 / 20</span>
-      <span id="quiz-score">점수: 0점</span>
+    <div id="view-lobby" class="hidden">
+      <p>문제를 풀 과목을 선택하세요 (다중 선택 가능)</p>
+      <div class="subject-grid">
+        <button class="subject-btn" onclick="toggleSubject(this, '국어')">국어</button>
+        <button class="subject-btn" onclick="toggleSubject(this, '수학')">수학</button>
+        <button class="subject-btn" onclick="toggleSubject(this, '과학')">과학</button>
+        <button class="subject-btn" onclick="toggleSubject(this, '사회')">사회</button>
+        <button class="subject-btn" onclick="toggleSubject(this, '영어')">영어</button>
+      </div>
+      <div class="button-row">
+        <button class="clear-btn" onclick="goLobby()">선택 초기화</button>
+        <button class="ask-btn" id="askBtn" onclick="prepareGame()">퀴즈 생성 및 게임 시작</button>
+      </div>
+      <button onclick="handleLogout()" class="secondary-btn" style="margin-top: 15px;">로그아웃</button>
     </div>
-    <div class="bar-container"><div id="timerBar" class="bar-fill"></div></div>
-    <div style="font-size: 14px; color: #888; margin-bottom: 5px;" id="quiz-subject">[과목]</div>
-    <div class="quiz-text" id="quiz-question">문제가 여기에 표시됩니다.</div>
-    <div id="quiz-options"></div>
-    <button onclick="speakText(document.getElementById('quiz-question').innerText)" class="secondary-btn" style="font-size: 14px; padding: 6px; margin-top: 15px;">🔊 문제 다시 듣기</button>
-  </div>
 
-  <div id="view-result" class="card hidden">
-    <h2>🎉 게임 종료!</h2>
-    <h1 id="final-score" style="color: #4A90E2; margin: 10px 0;">0점</h1>
-    <p id="game-summary">20문제 중 X문제를 맞추셨습니다!</p>
-    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
-    <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
-    <ul id="ranking-board" class="ranking-list"></ul>
-    <button onclick="goLobby()" style="background: #e67e22;">다시 도전하기</button>
+    <div id="view-loading" class="hidden">
+      <div id="status" class="status">Apps Script 서버에 요청을 보내는 중입니다...</div>
+      <div class="bar-container">
+        <div id="loadingBarFill" class="bar-fill"></div>
+      </div>
+    </div>
+
+    <div id="view-game" class="hidden">
+      <div id="feedback-container"></div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold;">
+        <span id="quiz-progress">1 / 20</span>
+        <span id="quiz-score">점수: 0점</span>
+      </div>
+      <div class="bar-container"><div id="timerBar" class="bar-fill"></div></div>
+      <div style="font-size: 14px; color: #888; text-align: left; margin-bottom: 5px;" id="quiz-subject">[과목]</div>
+      <div class="quiz-text" id="quiz-question">문제가 여기에 표시됩니다.</div>
+      <div id="quiz-options"></div>
+      <button onclick="speakText(document.getElementById('quiz-question').innerText)" class="secondary-btn" style="font-size: 14px; padding: 6px; margin-top: 15px; width: auto;">🔊 문제 다시 듣기</button>
+    </div>
+
+    <div id="view-result" class="hidden">
+      <h2>🎉 게임 종료!</h2>
+      <h1 id="final-score" style="color: #42a5f5; margin: 10px 0;">0점</h1>
+      <p id="game-summary">20문제 중 X문제를 맞추셨습니다!</p>
+      <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
+      <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
+      <ul id="ranking-board" class="ranking-list"></ul>
+      <button onclick="goLobby()" style="background: #e67e22; color: white;">다시 도전하기</button>
+    </div>
+
+    <div class="help">
+      단축키: 대기실 화면에서 Ctrl + Enter를 누르면 선택한 과목으로 게임이 바로 전송 및 시작됩니다.<br />
+      오류가 발생하면 Apps Script 배포 권한이 “모든 사용자”인지 확인하세요.
+    </div>
   </div>
 
   <script>
-    // 🔗 새로 발급하신 '모두에게 공개'된 구글 웹 앱 주소 바인딩 완료!
-    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyW8VF_agmZ-TGwhXA02rR3TGGkUvGG2Us2P0gOqiAzhuaPJwtsfC66ihzR5dAKLup0/exec';
+    // 🔗 새로 발급하신 따끈따끈한 새 배포 URL 적용 완료!
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxkJ4xGW7j1RxKWQ-8bbmGSDFQ1ia8u4DZZeFraAnaQ9lGFnrVHqb_rWVskf9eVKrN3/exec';
 
     let currentUser = null;
     let selectedSubjects = [];
@@ -155,6 +177,19 @@
     let quizStartTime = 0;
     const LIMIT_TIME = 60; 
 
+    const askBtn = document.getElementById('askBtn');
+    const statusBox = document.getElementById('status');
+
+    // Ctrl + Enter 단축키 이벤트 바인딩
+    window.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter' && event.ctrlKey) {
+        const lobbyVisible = !document.getElementById('view-lobby').classList.contains('hidden');
+        if (lobbyVisible) {
+          prepareGame();
+        }
+      }
+    });
+
     function showView(viewId) {
       ['view-auth', 'view-lobby', 'view-loading', 'view-game', 'view-result'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
@@ -162,61 +197,56 @@
       document.getElementById(viewId).classList.remove('hidden');
     }
 
-    function speakText(text) {
-      window.speechSynthesis.cancel();
-      const utterance = new SynthesisUtterance ? new SpeechSynthesisUtterance(text) : null;
-      if(!utterance) {
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'ko-KR';
-        u.rate = 1.1; 
-        window.speechSynthesis.speak(u);
-        return;
+    function setLoading(isLoading) {
+      if(askBtn) {
+        askBtn.disabled = isLoading;
+        askBtn.textContent = isLoading ? '생성 중...' : '퀴즈 생성 및 게임 시작';
       }
-      utterance.lang = 'ko-KR';
-      utterance.rate = 1.1; 
-      window.speechSynthesis.speak(utterance);
     }
 
-    /* ChatGPT 앱 스크립트 통신 및 데이터 처리 엔진 */
+    function speakText(text) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.rate = 1.1; 
+      window.speechSynthesis.speak(u);
+    }
+
+    /* ChatGPT 연동 및 문제 패키징 가동 함수 */
     async function prepareGame() {
       if(selectedSubjects.length === 0) {
-        return alert('최소 1개 이상의 과목을 선택해주세요!');
+        alert('질문(과목)을 최소 1개 이상 선택해주세요.');
+        return;
       }
 
-      showView('view-loading');
-      const statusText = document.getElementById('loading-status');
-      const subtext = document.getElementById('loading-subtext');
-      const barFill = document.getElementById('loadingBarFill');
-      
-      barFill.style.width = '25%';
-      statusText.innerText = "📡 공개 GAS 서버에 데이터 전송 중...";
-      subtext.innerText = `선택 과목 [ ${selectedSubjects.join(', ')} ] 패키징 중`;
-
-      // ChatGPT가 순수한 JSON 배열 구조만 뽑도록 유도하는 정밀 프롬프트
-      const finalQuestionPrompt = `사용자가 고른 과목은 [${selectedSubjects.join(', ')}] 입니다. 이 과목들을 조합하여 고등학교 수준의 객관식 4지선다형 문제를 총 20개 출제해주세요. 결과는 반드시 부연 설명이나 마크다운 표기(\`\`\`json 등) 없이 순수한 JSON 배열 포맷만 반환해야 합니다. 내부 객체 구조는 {"subject": "과목명", "q": "문제 내용", "o": ["보기1","보기2","보기3","보기4"], "a": 정답인덱스숫자0~3} 구조를 정확히 지켜주세요.`;
-
       try {
-        setTimeout(() => { barFill.style.width = '55%'; statusText.innerText = "⚡ ChatGPT 서버 내부 연산 및 문제 출제 중..."; }, 800);
+        setLoading(true);
+        showView('view-loading');
+        
+        const barFill = document.getElementById('loadingBarFill');
+        barFill.style.width = '30%';
+        statusBox.textContent = 'Apps Script 서버에 요청을 보내는 중입니다.';
 
-        // 앱 스크립트에 POST 통신 시도
-        const response = await fetch(GAS_WEB_APP_URL, {
+        const prompt = `사용자가 고른 과목은 [${selectedSubjects.join(', ')}] 입니다. 이 과목들을 조합하여 고등학교 수준의 객관식 4지선다형 문제를 총 20개 출제해주세요. 결과는 반드시 부연 설명이나 마크다운 표기(\`\`\`json 등) 없이 순수한 JSON 배열 포맷만 반환해야 합니다. 내부 객체 구조는 {"subject": "과목명", "q": "문제 내용", "o": ["보기1","보기2","보기3","보기4"], "a": 정답인덱스숫자0~3} 구조를 정확히 지켜주세요.`;
+
+        const response = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           body: JSON.stringify({
-            question: finalQuestionPrompt
+            question: prompt
           })
         });
-        
-        if (!response.ok) throw new Error("서버 응답 거부 또는 네트워크 오류");
-        
+
+        barFill.style.width = '60%';
+        statusBox.textContent = '답변을 생성하는 중입니다...';
+
         const data = await response.json();
-        
+
         if (data.error) {
           throw new Error(data.error);
         }
 
         let quizData = data.answer;
         if (typeof quizData === 'string') {
-          // 혹시 모를 백틱(```json) 마크다운 코드 필터링 처리
           if (quizData.startsWith("```")) {
             quizData = quizData.replace(/```json|```/g, "").trim();
           }
@@ -229,28 +259,29 @@
           throw new Error("유효한 문제 리스트 데이터 포맷이 아닙니다.");
         }
 
-        barFill.style.width = '85%';
-        statusText.innerText = "🔀 20문항 로드 및 문제 셔플 완료!";
+        barFill.style.width = '90%';
+        statusBox.textContent = '문항 배치 및 문제 셔플 완료';
 
-        // 문제 순서 무작위로 섞기
+        // 무작위 셔플
         gameQuizzes.sort(() => Math.random() - 0.5);
 
         setTimeout(() => {
           barFill.style.width = '100%';
-          statusText.innerText = "✅ 준비 완료!";
+          statusBox.textContent = '답변 생성 완료';
           
-          setTimeout(() => {
-            currentQuizIdx = 0;
-            totalScore = 0;
-            correctCount = 0;
-            showView('view-game');
-            renderQuiz();
-          }, 600);
-        }, 1000);
+          currentQuizIdx = 0;
+          totalScore = 0;
+          correctCount = 0;
+          showView('view-game');
+          renderQuiz();
+          setLoading(false);
+        }, 600);
 
       } catch (error) {
-        console.error("통신 실패 비상 로그:", error);
-        alert("문제를 가져오지 못했습니다.\n오류내용: " + error.message + "\n\n💡 팁: 만약 여전히 안 된다면 구글 앱 스크립트 코드 수정 후 [배포] -> [새 배포]로 버전 번호를 올려 새로 배포했는지 체크해 보세요!");
+        console.error(error);
+        alert('오류가 발생했습니다.\n\n' + error.message);
+        statusBox.textContent = '요청 실패';
+        setLoading(false);
         goLobby();
       }
     }
@@ -262,7 +293,6 @@
       }
 
       document.getElementById('feedback-container').innerHTML = '';
-
       const quiz = gameQuizzes[currentQuizIdx];
       
       document.getElementById('quiz-progress').innerText = `${currentQuizIdx + 1} / ${Math.min(20, gameQuizzes.length)}`;
@@ -340,7 +370,7 @@
       setTimeout(renderQuiz, 800);
     }
 
-    /* Firebase 리스너 세팅 */
+    /* Firebase 인증 및 데이터베이스 트리거 */
     setTimeout(() => {
       window.fbAuth.onAuthStateChanged(user => {
         if (user) {
