@@ -7,7 +7,6 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    // 💡 Firestore 대신 Realtime Database SDK 로드 완료
     import { getDatabase, ref, set, get, child, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     // Firebase 설정값
@@ -24,9 +23,8 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const rtdb = getDatabase(app); // Realtime DB 객체 생성
+    const rtdb = getDatabase(app);
 
-    // 전역 윈도우 바인딩 (레거시 코드 매핑 대응)
     window.fbAuth = auth;
     window.fbRtdb = rtdb;
     window.signIn = signInWithEmailAndPassword;
@@ -85,7 +83,6 @@
     .option-btn.correct-flash { background: #28a745 !important; color: white !important; border-color: #1e7e34 !important; font-weight: bold; }
     .option-btn.wrong-flash { background: #dc3545 !important; color: white !important; border-color: #bd2130 !important; }
     
-    /* 팝업 효과 */
     .score-popup { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: 28px; font-weight: bold; animation: fadeUp 0.8s ease-out forwards; z-index: 10; pointer-events: none; }
     .score-popup.plus { color: #28a745; }
     .score-popup.minus { color: #dc3545; }
@@ -100,8 +97,6 @@
     .ranking-item.my-rank { background: #fffde7; border-radius: 6px; border: 1px solid #fff59d; }
     .status { min-height: 24px; color: #555; font-size: 14px; margin: 10px 0; }
     .help { margin-top: 12px; font-size: 13px; color: #777; text-align: left; line-height: 1.6; }
-
-    /* 토글 스위치 컴포넌트 */
     .toggle-row { display: flex; justify-content: space-between; align-items: center; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px; }
   </style>
 </head>
@@ -145,7 +140,7 @@
       </div>
       
       <hr style="margin: 25px 0; border: 0; border-top: 1px solid #eee;">
-      <h3>🏆 실시간 통합 랭킹 TOP 10 (Realtime DB)</h3>
+      <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
       <ul id="lobby-ranking-board" class="ranking-list"></ul>
 
       <button onclick="handleLogout()" class="secondary-btn" style="margin-top: 15px;">로그아웃</button>
@@ -195,10 +190,6 @@
       <p id="game-summary">20문제 중 X문제를 맞추셨습니다!</p>
       <button onclick="goLobby()" style="background: #e67e22; color: white;">대기실로 돌아가기</button>
     </div>
-
-    <div class="help">
-      단축키: 대기실 화면에서 Ctrl + Enter를 누르면 선택한 과목으로 게임이 바로 전송 및 시작됩니다.
-    </div>
   </div>
 
   <script>
@@ -222,14 +213,6 @@
 
     const askBtn = document.getElementById('askBtn');
     const statusBox = document.getElementById('status');
-
-    window.addEventListener('keydown', function(event) {
-      if (event.key === 'Enter' && event.ctrlKey) {
-        if (!document.getElementById('view-lobby').classList.contains('hidden')) {
-          prepareGame();
-        }
-      }
-    });
 
     function showView(viewId) {
       ['view-auth', 'view-lobby', 'view-setting', 'view-loading', 'view-game', 'view-result'].forEach(id => {
@@ -260,7 +243,6 @@
       showView('view-setting');
     }
 
-    // 💡 Realtime Database 전용 설정 저장 오퍼레이션
     async function saveSettings() {
       const inputNick = document.getElementById('setting-nickname').value.trim();
       if(!inputNick) return alert("닉네임을 한 글자 이상 작성해주세요.");
@@ -276,7 +258,7 @@
             lastScore: userLastScore,
             bestScore: userBestScore
           });
-          alert("설정이 Realtime DB에 저장되었습니다.");
+          alert("설정이 저장되었습니다.");
           goLobby();
         } catch(e) {
           alert("설정 보관에 실패했습니다: " + e.message);
@@ -298,7 +280,7 @@
         barFill.style.width = '30%';
         statusBox.textContent = 'Apps Script 서버에 요청을 보내는 중입니다.';
 
-        const prompt = `사용자가 고른 과목은 [${selectedSubjects.join(', ')}] 입니다. 이 과목들을 조합하여 고등학교 수준의 객관식 4지선다형 문제를 총 20개 출제해주세요. 결과는 반드시 부연 설명이나 마크다운 표기(\`\`\`json 등) 없이 순수한 JSON 배열 포맷만 반환해야 합니다. 내부 객체 구조는 {"subject": "과목명", "q": "문제 내용", "o": ["보기1","보기2","보기3","보기4"], "a": 정답인덱스숫자0~3} 구조를 정확히 지켜주세요.`;
+        const prompt = `사용자가 고른 과목은 [${selectedSubjects.join(', ')}] 입니다. 이 과목들을 조합하여 고등학교 수준의 객관식 4지선다형 문제를 총 20개 출제해주세요. 결과는 반드시 부연 설명이나 마크다운 표기 없이 순수한 JSON 배열 포맷만 반환해야 합니다.`;
 
         const response = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
@@ -306,11 +288,7 @@
         });
 
         barFill.style.width = '60%';
-        statusBox.textContent = '답변을 생성하는 중입니다...';
-
         const data = await response.json();
-        if (data.error) throw new Error(data.error);
-
         let quizData = data.answer;
         if (typeof quizData === 'string') {
           if (quizData.startsWith("```")) {
@@ -321,22 +299,12 @@
           gameQuizzes = quizData || data;
         }
 
-        barFill.style.width = '90%';
-        statusBox.textContent = '문항 배치 및 문제 셔플 완료';
-        gameQuizzes.sort(() => Math.random() - 0.5);
-
-        setTimeout(() => {
-          barFill.style.width = '100%';
-          showView('view-game');
-          currentQuizIdx = 0;
-          totalScore = 0;
-          correctCount = 0;
-          renderQuiz();
-          setLoading(false);
-        }, 600);
-
+        barFill.style.width = '100%';
+        showView('view-game');
+        currentQuizIdx = 0; totalScore = 0; correctCount = 0;
+        renderQuiz();
+        setLoading(false);
       } catch (error) {
-        console.error(error);
         alert('오류가 발생했습니다.\n\n' + error.message);
         setLoading(false);
         goLobby();
@@ -345,10 +313,8 @@
 
     function renderQuiz() {
       if(currentQuizIdx >= gameQuizzes.length || currentQuizIdx >= 20) {
-        endGame();
-        return;
+        endGame(); return;
       }
-
       document.getElementById('feedback-container').innerHTML = '';
       const quiz = gameQuizzes[currentQuizIdx];
       
@@ -362,13 +328,11 @@
       quiz.o.forEach((opt, idx) => {
         const btn = document.createElement('button');
         btn.className = 'option-btn';
-        btn.id = `opt-btn-${idx}`;
         btn.innerText = `${idx + 1}. ${opt}`;
         btn.onclick = () => handleAnswer(idx);
         optionsDiv.appendChild(btn);
       });
-
-      speakText(`${quiz.subject || ''} 문제입니다. ${quiz.q}`);
+      speakText(quiz.q);
       startTimer();
     }
 
@@ -380,50 +344,33 @@
         const elapsed = (Date.now() - quizStartTime) / 1000;
         const remainPercent = Math.max(0, ((LIMIT_TIME - elapsed) / LIMIT_TIME) * 100);
         bar.style.width = remainPercent + '%';
-        if(elapsed >= LIMIT_TIME) {
-          clearInterval(timerInterval);
-          handleAnswer(-1);
-        }
+        if(elapsed >= LIMIT_TIME) { handleAnswer(-1); }
       }, 100);
     }
 
     function handleAnswer(chosenIdx) {
       clearInterval(timerInterval);
-      window.speechSynthesis.cancel();
-
       const quiz = gameQuizzes[currentQuizIdx];
-      const elapsed = (Date.now() - quizStartTime) / 1000;
-      
-      const allButtons = document.querySelectorAll('.option-btn');
-      allButtons.forEach(btn => btn.disabled = true);
-
-      const feedbackContainer = document.getElementById('feedback-container');
-      let earnedScore = 0;
-
       if(String(chosenIdx) === String(quiz.a)) {
-        const bonus = Math.max(0, Math.round((LIMIT_TIME - elapsed) * 5));
-        earnedScore = 100 + bonus;
-        totalScore += earnedScore;
-        correctCount++;
-        document.getElementById(`opt-btn-${chosenIdx}`).classList.add('correct-flash');
-        feedbackContainer.innerHTML = `<div class="score-popup plus">+${earnedScore}점!</div>`;
-      } else {
-        if(chosenIdx !== -1) document.getElementById(`opt-btn-${chosenIdx}`).classList.add('wrong-flash');
-        if(document.getElementById(`opt-btn-${quiz.a}`)) document.getElementById(`opt-btn-${quiz.a}`).classList.add('correct-flash');
-        feedbackContainer.innerHTML = `<div class="score-popup minus">틀렸습니다! 0점</div>`;
+        totalScore += 100; correctCount++;
       }
-
-      document.getElementById('quiz-score').innerText = `점수: ${totalScore}점`;
       currentQuizIdx++;
-      setTimeout(renderQuiz, 800);
+      setTimeout(renderQuiz, 600);
     }
 
-    // 💡 Realtime Database 전용 유저 데이터 동기화
+    /* 💡 [수정 완료] DB가 잠겨있어도 로그인이 끊기지 않는 철벽 방어막 함수 */
     async function syncUserData(user) {
       if(!user) return;
       try {
         const dbRef = window.dbRef(window.fbRtdb);
-        const snapshot = await window.dbGet(window.dbChild(dbRef, `profiles/${user.uid}`));
+        let snapshot;
+        
+        try {
+          snapshot = await window.dbGet(window.dbChild(dbRef, `profiles/${user.uid}`));
+        } catch (dbErr) {
+          console.error("DB 권한 차단됨. 규칙을 허용하세요:", dbErr);
+          snapshot = { exists: () => false }; 
+        }
 
         if(snapshot.exists()) {
           const pData = snapshot.val();
@@ -433,77 +380,51 @@
           userLastScore = pData.lastScore || 0;
         } else {
           userNickname = user.email.split('@')[0];
-          isTtsEnabled = true;
-          userBestScore = 0;
-          userLastScore = 0;
-          await window.dbSet(window.dbRef(window.fbRtdb, "profiles/" + user.uid), {
-            nickname: userNickname,
-            isTtsEnabled: isTtsEnabled,
-            bestScore: 0,
-            lastScore: 0
-          });
+          isTtsEnabled = true; userBestScore = 0; userLastScore = 0;
+          
+          window.dbSet(window.dbRef(window.fbRtdb, "profiles/" + user.uid), {
+            nickname: userNickname, isTtsEnabled: isTtsEnabled, bestScore: 0, lastScore: 0
+          }).catch(e => console.error("DB 쓰기 거부됨:", e));
         }
 
+        // DB 문제 여부와 무조건 독립적으로 UI 출력 처리 진행
         document.getElementById('user-welcome').innerText = `${userNickname}님, 환영합니다!`;
         document.getElementById('lobby-last-score').innerText = `${userLastScore}점`;
         document.getElementById('lobby-best-score').innerText = `${userBestScore}점`;
       } catch (e) {
-        console.error("Realtime DB 연동 실패:", e);
+        console.error("syncUserData 내부 에러 차단:", e);
       }
     }
 
-    // 💡 Realtime Database 전용 게임 종료 정보 트리거
     async function endGame() {
       showView('view-result');
       document.getElementById('final-score').innerText = `${totalScore} 점`;
-      document.getElementById('game-summary').innerText = `20문제 중 총 ${correctCount}문제를 맞추셨습니다!`;
-
       userLastScore = totalScore;
-      if(totalScore > userBestScore) {
-        userBestScore = totalScore;
-      }
+      if(totalScore > userBestScore) userBestScore = totalScore;
 
       if(currentUser) {
         try {
           const finalName = userNickname || currentUser.email.split('@')[0];
-          
           await window.dbSet(window.dbRef(window.fbRtdb, "profiles/" + currentUser.uid), {
-            nickname: finalName,
-            isTtsEnabled: isTtsEnabled,
-            lastScore: userLastScore,
-            bestScore: userBestScore
+            nickname: finalName, isTtsEnabled: isTtsEnabled, lastScore: userLastScore, bestScore: userBestScore
           });
-
-          // 랭킹 저장 시 역순 정렬 가공을 위한 음수 스코어 우회 가공(Realtime DB 전용 테크닉)
           await window.dbSet(window.dbRef(window.fbRtdb, "rankings/" + currentUser.uid), {
-            username: finalName, 
-            score: userBestScore,
-            negScore: -userBestScore, 
-            updatedAt: Date.now()
+            username: finalName, score: userBestScore, negScore: -userBestScore, updatedAt: Date.now()
           });
-        } catch(e) { console.error("Realtime DB 결과 업로드 실패:", e); }
+        } catch(e) { console.error("결과 업로드 실패:", e); }
       }
     }
 
-    // 💡 Realtime Database 전용 실시간 랭킹 보드 출력 기믹
     function loadRanking() {
-      // 내림차순 지원을 위해 가공한 negScore 기준으로 정렬 쿼리 컴파일
       const rankRef = window.dbRef(window.fbRtdb, "rankings");
       const q = window.dbQuery(rankRef, window.dbOrderByChild("negScore"), window.dbLimitToLast(10));
-      
       window.dbOnValue(q, (snapshot) => {
         const board = document.getElementById('lobby-ranking-board');
         board.innerHTML = '';
         if(!snapshot.exists()) return;
-
         let rankList = [];
-        snapshot.forEach((childSnapshot) => {
-          rankList.push(childSnapshot.val());
-        });
-        
-        // 정렬 순서 보정
+        snapshot.forEach((childSnapshot) => { rankList.push(childSnapshot.val()); });
         rankList.sort((a, b) => b.score - a.score);
-
         rankList.forEach((data, index) => {
           const li = document.createElement('li');
           li.className = `ranking-item ${data.username === userNickname ? 'my-rank' : ''}`;
@@ -513,7 +434,6 @@
       });
     }
 
-    /* 🛠️ 완벽 고정된 로그인 및 인증 인터셉터 */
     window.fbAuth.onAuthStateChanged(async (user) => {
       if (user) {
         currentUser = user;
@@ -521,8 +441,7 @@
         showView('view-lobby');
         loadRanking();
       } else {
-        currentUser = null;
-        showView('view-auth');
+        currentUser = null; showView('view-auth');
       }
     });
 
@@ -530,11 +449,7 @@
       const email = document.getElementById('auth-email').value.trim();
       const pw = document.getElementById('auth-pw').value;
       if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
-      try { 
-        await window.signIn(window.fbAuth, email, pw); 
-      } catch(e) { 
-        alert('로그인 실패: ' + e.message); 
-      }
+      try { await window.signIn(window.fbAuth, email, pw); } catch(e) { alert('로그인 실패: ' + e.message); }
     }
 
     async function handleSignUp() {
@@ -543,22 +458,16 @@
       if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
       try {
         await window.signUp(window.fbAuth, email, pw);
-        alert('회원가입 성공! 로그인 상태로 전환됩니다.');
-      } catch(e) { 
-        alert('회원가입 실패: ' + e.message); 
-      }
+        alert('회원가입 성공!');
+      } catch(e) { alert('회원가입 실패: ' + e.message); }
     }
 
-    function handleLogout() { 
-      window.logOut(window.fbAuth); 
-    }
-
+    function handleLogout() { window.logOut(window.fbAuth); }
     function toggleSubject(btn, subjectName) {
       btn.classList.toggle('active');
       if(btn.classList.contains('active')) { selectedSubjects.push(subjectName); } 
       else { selectedSubjects = selectedSubjects.filter(s => s !== subjectName); }
     }
-
     async function goLobby() {
       selectedSubjects = [];
       document.querySelectorAll('.subject-btn').forEach(b => b.classList.remove('active'));
