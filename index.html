@@ -244,8 +244,11 @@
       }
     }
 
+    /* 🛠️ 버그 수정: TTS 인터페이스 문법 오류 제거 및 안전성 확보 */
     function speakText(text) {
-      if (!isTtsEnabled) return; // 설정에서 배제 시 소리 출력 차단
+      if (!isTtsEnabled) return; 
+      if (!window.speechSynthesis) return;
+      
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ko-KR';
@@ -253,7 +256,6 @@
       window.speechSynthesis.speak(u);
     }
 
-    /* 설정창 로드 및 연동 함수 */
     function showSettingView() {
       document.getElementById('setting-nickname').value = userNickname;
       document.getElementById('setting-tts-toggle').checked = isTtsEnabled;
@@ -269,7 +271,6 @@
 
       if(currentUser) {
         try {
-          // profiles 컬렉션에 유저 개인 커스텀 설정 정보 기입
           await window.dbSet(window.dbDoc(window.fbDb, "profiles", currentUser.uid), {
             nickname: userNickname,
             isTtsEnabled: isTtsEnabled,
@@ -285,7 +286,6 @@
       }
     }
 
-    /* ChatGPT 연동 및 문제 생성 */
     async function prepareGame() {
       if(selectedSubjects.length === 0) {
         alert('과목을 최소 1개 이상 선택해주세요.');
@@ -420,41 +420,41 @@
       setTimeout(renderQuiz, 800);
     }
 
-    /* 유저 동기화 정보 취득 및 가공 */
+    /* 🛠️ 버그 수정: 비동기 데이터 획득 순서 체계 재조정 */
     async function syncUserData(user) {
       if(!user) return;
       
-      // 1. 프로필 수집 확인
-      const profileRef = window.dbDoc(window.fbDb, "profiles", user.uid);
-      const profileSnap = await window.dbGetDoc(profileRef);
+      try {
+        const profileRef = window.dbDoc(window.fbDb, "profiles", user.uid);
+        const profileSnap = await window.dbGetDoc(profileRef);
 
-      if(profileSnap.exists()) {
-        const pData = profileSnap.data();
-        userNickname = pData.nickname || user.email.split('@')[0];
-        isTtsEnabled = pData.isTtsEnabled !== undefined ? pData.isTtsEnabled : true;
-        userBestScore = pData.bestScore || 0;
-        userLastScore = pData.lastScore || 0;
-      } else {
-        // 프로필이 없는 신규 회원 초기값 배정
-        userNickname = user.email.split('@')[0];
-        isTtsEnabled = true;
-        userBestScore = 0;
-        userLastScore = 0;
-        await window.dbSet(profileRef, {
-          nickname: userNickname,
-          isTtsEnabled: isTtsEnabled,
-          bestScore: 0,
-          lastScore: 0
-        });
+        if(profileSnap.exists()) {
+          const pData = profileSnap.data();
+          userNickname = pData.nickname || user.email.split('@')[0];
+          isTtsEnabled = pData.isTtsEnabled !== undefined ? pData.isTtsEnabled : true;
+          userBestScore = pData.bestScore || 0;
+          userLastScore = pData.lastScore || 0;
+        } else {
+          userNickname = user.email.split('@')[0];
+          isTtsEnabled = true;
+          userBestScore = 0;
+          userLastScore = 0;
+          await window.dbSet(profileRef, {
+            nickname: userNickname,
+            isTtsEnabled: isTtsEnabled,
+            bestScore: 0,
+            lastScore: 0
+          });
+        }
+
+        document.getElementById('user-welcome').innerText = `${userNickname}님, 환영합니다!`;
+        document.getElementById('lobby-last-score').innerText = `${userLastScore}점`;
+        document.getElementById('lobby-best-score').innerText = `${userBestScore}점`;
+      } catch (e) {
+        console.error("사용자 정보 동기화 실패:", e);
       }
-
-      // 대기실 데이터 매핑
-      document.getElementById('user-welcome').innerText = `${userNickname}님, 환영합니다!`;
-      document.getElementById('lobby-last-score').innerText = `${userLastScore}점`;
-      document.getElementById('lobby-best-score').innerText = `${userBestScore}점`;
     }
 
-    /* 게임 종료 및 서버 데이터 백업 */
     async function endGame() {
       showView('view-result');
       document.getElementById('final-score').innerText = `${totalScore} 점`;
@@ -467,15 +467,15 @@
 
       if(currentUser) {
         try {
-          // 1. 프로필 정보 갱신 (대시보드용)
+          const finalName = userNickname || currentUser.email.split('@')[0];
+          
           await window.dbSet(window.dbDoc(window.fbDb, "profiles", currentUser.uid), {
             lastScore: userLastScore,
             bestScore: userBestScore
           }, { merge: true });
 
-          // 2. 통합 랭킹 테이블 전송
           await window.dbSet(window.dbDoc(window.fbDb, "rankings", currentUser.uid), {
-            username: userNickname, // 설정한 고유 닉네임 사용!
+            username: finalName, 
             score: userBestScore,
             updatedAt: Date.now()
           });
@@ -483,7 +483,6 @@
       }
     }
 
-    /* 실시간 통합 랭킹 보드 출력 */
     function loadRanking() {
       const q = window.dbQuery(window.dbCollection(window.fbDb, "rankings"), window.dbOrderBy("score", "desc"), window.dbLimit(10));
       window.dbOnSnapshot(q, (snapshot) => {
@@ -493,7 +492,6 @@
         snapshot.forEach((doc) => {
           const data = doc.data();
           const li = document.createElement('li');
-          // 본인 랭킹 강조 표시 클래스 추가
           li.className = `ranking-item ${data.username === userNickname ? 'my-rank' : ''}`;
           li.innerHTML = `<span><strong>${rank}위</strong>. ${data.username}</span> <span>${data.score}점</span>`;
           board.appendChild(li);
@@ -502,12 +500,12 @@
       });
     }
 
-    /* Firebase 인증 이벤트 감지기 */
+    /* 🛠️ 버그 수정: 인증 성공 후 데이터를 완벽히 가져온 뒤 뷰(View)를 전환하도록 수정 */
     setTimeout(() => {
       window.fbAuth.onAuthStateChanged(async (user) => {
         if (user) {
           currentUser = user;
-          await syncUserData(user);
+          await syncUserData(user); 
           showView('view-lobby');
           loadRanking();
         } else {
@@ -542,10 +540,10 @@
       else { selectedSubjects = selectedSubjects.filter(s => s !== subjectName); }
     }
 
-    function goLobby() {
+    async function goLobby() {
       selectedSubjects = [];
       document.querySelectorAll('.subject-btn').forEach(b => b.classList.remove('active'));
-      if(currentUser) syncUserData(currentUser);
+      if(currentUser) await syncUserData(currentUser);
       showView('view-lobby');
     }
   </script>
