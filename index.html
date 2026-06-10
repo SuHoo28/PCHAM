@@ -7,9 +7,10 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, collection, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    // 💡 구형 Firestore 대신 Realtime Database 모듈을 로드합니다.
+    import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // Firebase 설정값 (기존 설정 유지)
+    // Firebase 설정값
     const firebaseConfig = {
       apiKey: "AIzaSyBgA0Pi_wRXAW4cTbDDybkJtJtJWBcft1c",
       authDomain: "pppp-2272a.firebaseapp.com",
@@ -23,20 +24,21 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    const rtdb = getDatabase(app); // Realtime DB 인스턴스 가동
 
     window.fbAuth = auth;
-    window.fbDb = db;
+    window.fbRtdb = rtdb;
     window.signIn = signInWithEmailAndPassword;
     window.signUp = createUserWithEmailAndPassword;
     window.logOut = signOut;
-    window.dbDoc = doc;
-    window.dbSet = setDoc;
-    window.dbCollection = collection;
+    
+    // Realtime DB용 맵핑 가동
+    window.dbRef = ref;
+    window.dbSet = set;
+    window.dbOnValue = onValue;
     window.dbQuery = query;
-    window.dbOrderBy = orderBy;
-    window.dbLimit = limit;
-    window.dbOnSnapshot = onSnapshot;
+    window.dbOrderByChild = orderByChild;
+    window.dbLimitToLast = limitToLast;
   </script>
 
   <style>
@@ -94,11 +96,11 @@
 <body>
   <div class="container">
     <h1>AI 스피드 퀴즈 챌린지</h1>
-    <div class="subtitle">GitHub Pages + Google Apps Script + OpenAI API 연동 완료</div>
+    <div class="subtitle">GitHub Pages + Google Apps Script + Realtime DB 연동</div>
 
     <div class="info">
       현재 구조: GitHub Pages 화면 → Google Apps Script 서버 → OpenAI API → 답변 반환<br />
-      API Key는 index.html에 들어가지 않고 Apps Script의 <strong>스크립트 속성(Property)</strong>에 저장되어 안전합니다.
+      <strong>데이터베이스 저장소: Firebase Realtime Database 완벽 매핑 가동 중</strong>
     </div>
 
     <div id="view-auth">
@@ -151,7 +153,7 @@
       <h1 id="final-score" style="color: #42a5f5; margin: 10px 0;">0점</h1>
       <p id="game-summary">20문제 중 X문제를 맞추셨습니다!</p>
       <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
-      <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
+      <h3>🏆 실시간 통합 랭킹 TOP 10 (Realtime DB)</h3>
       <ul id="ranking-board" class="ranking-list"></ul>
       <button onclick="goLobby()" style="background: #e67e22; color: white;">다시 도전하기</button>
     </div>
@@ -163,7 +165,6 @@
   </div>
 
   <script>
-    // 🔗 새로 발급하신 따끈따끈한 새 배포 URL 적용 완료!
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxkJ4xGW7j1RxKWQ-8bbmGSDFQ1ia8u4DZZeFraAnaQ9lGFnrVHqb_rWVskf9eVKrN3/exec';
 
     let currentUser = null;
@@ -180,13 +181,10 @@
     const askBtn = document.getElementById('askBtn');
     const statusBox = document.getElementById('status');
 
-    // Ctrl + Enter 단축키 이벤트 바인딩
     window.addEventListener('keydown', function(event) {
       if (event.key === 'Enter' && event.ctrlKey) {
         const lobbyVisible = !document.getElementById('view-lobby').classList.contains('hidden');
-        if (lobbyVisible) {
-          prepareGame();
-        }
+        if (lobbyVisible) { prepareGame(); }
       }
     });
 
@@ -212,7 +210,6 @@
       window.speechSynthesis.speak(u);
     }
 
-    /* ChatGPT 연동 및 문제 패키징 가동 함수 */
     async function prepareGame() {
       if(selectedSubjects.length === 0) {
         alert('질문(과목)을 최소 1개 이상 선택해주세요.');
@@ -227,23 +224,18 @@
         barFill.style.width = '30%';
         statusBox.textContent = 'Apps Script 서버에 요청을 보내는 중입니다.';
 
-        const prompt = `사용자가 고른 과목은 [${selectedSubjects.join(', ')}] 입니다. 이 과목들을 조합하여 고등학교 수준의 객관식 4지선다형 문제를 총 20개 출제해주세요. 결과는 반드시 부연 설명이나 마크다운 표기(\`\`\`json 등) 없이 순수한 JSON 배열 포맷만 반환해야 합니다. 내부 객체 구조는 {"subject": "과목명", "q": "문제 내용", "o": ["보기1","보기2","보기3","보기4"], "a": 정답인덱스숫자0~3} 구조를 정확히 지켜주세요.`;
+        const prompt = `사용자가 고른 과목은 [${selectedSubjects.join(', ')}] 입니다. 이 과목들을 조합하여 고등학교 수준의 객관식 4지선다형 문제를 총 20개 출제해주세요. 결과는 반드시 부연 설명이나 마크다운 표기 없이 순수한 JSON 배열 포맷만 반환해야 합니다. 내부 객체 구조는 {"subject": "과목명", "q": "문제 내용", "o": ["보기1","보기2","보기3","보기4"], "a": 정답인덱스숫자0~3} 구조를 정확히 지켜주세요.`;
 
         const response = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
-          body: JSON.stringify({
-            question: prompt
-          })
+          body: JSON.stringify({ question: prompt })
         });
 
         barFill.style.width = '60%';
         statusBox.textContent = '답변을 생성하는 중입니다...';
 
         const data = await response.json();
-
-        if (data.error) {
-          throw new Error(data.error);
-        }
+        if (data.error) throw new Error(data.error);
 
         let quizData = data.answer;
         if (typeof quizData === 'string') {
@@ -255,23 +247,14 @@
           gameQuizzes = quizData || data;
         }
 
-        if (!Array.isArray(gameQuizzes) || gameQuizzes.length === 0) {
-          throw new Error("유효한 문제 리스트 데이터 포맷이 아닙니다.");
-        }
-
         barFill.style.width = '90%';
         statusBox.textContent = '문항 배치 및 문제 셔플 완료';
-
-        // 무작위 셔플
         gameQuizzes.sort(() => Math.random() - 0.5);
 
         setTimeout(() => {
           barFill.style.width = '100%';
           statusBox.textContent = '답변 생성 완료';
-          
-          currentQuizIdx = 0;
-          totalScore = 0;
-          correctCount = 0;
+          currentQuizIdx = 0; totalScore = 0; correctCount = 0;
           showView('view-game');
           renderQuiz();
           setLoading(false);
@@ -288,8 +271,7 @@
 
     function renderQuiz() {
       if(currentQuizIdx >= gameQuizzes.length || currentQuizIdx >= 20) {
-        endGame();
-        return;
+        endGame(); return;
       }
 
       document.getElementById('feedback-container').innerHTML = '';
@@ -355,44 +337,38 @@
         feedbackContainer.innerHTML = `<div class="score-popup plus">+${earnedScore}점!</div>`;
       } 
       else {
-        if(chosenIdx !== -1) {
-          document.getElementById(`opt-btn-${chosenIdx}`).classList.add('wrong-flash');
-        }
-        if(document.getElementById(`opt-btn-${quiz.a}`)) {
-          document.getElementById(`opt-btn-${quiz.a}`).classList.add('correct-flash');
-        }
+        if(chosenIdx !== -1) document.getElementById(`opt-btn-${chosenIdx}`).classList.add('wrong-flash');
+        if(document.getElementById(`opt-btn-${quiz.a}`)) document.getElementById(`opt-btn-${quiz.a}`).classList.add('correct-flash');
         feedbackContainer.innerHTML = `<div class="score-popup minus">틀렸습니다! 0점</div>`;
       }
 
       document.getElementById('quiz-score').innerText = `점수: ${totalScore}점`;
-
       currentQuizIdx++;
       setTimeout(renderQuiz, 800);
     }
 
-    /* Firebase 인증 및 데이터베이스 트리거 */
-    setTimeout(() => {
-      window.fbAuth.onAuthStateChanged(user => {
-        if (user) {
-          currentUser = user;
-          showView('view-lobby');
-          loadRanking();
-        } else {
-          currentUser = null;
-          showView('view-auth');
-        }
-      });
-    }, 1000);
+    /* 💡 Realtime DB 안전 벨트 레이어 장착 및 인증 콜백 감시 */
+    window.fbAuth.onAuthStateChanged(user => {
+      if (user) {
+        currentUser = user;
+        showView('view-lobby');
+        // 랭킹 수집 과정에서 예외가 생겨도 로그인은 통과시킵니다.
+        try { loadRanking(); } catch(e) { console.error("랭킹 스트리밍 지연:", e); }
+      } else {
+        currentUser = null;
+        showView('view-auth');
+      }
+    });
 
     async function handleLogin() {
-      const email = document.getElementById('auth-email').value;
+      const email = document.getElementById('auth-email').value.trim();
       const pw = document.getElementById('auth-pw').value;
       if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
       try { await window.signIn(window.fbAuth, email, pw); } catch(e) { alert('로그인 실패: ' + e.message); }
     }
 
     async function handleSignUp() {
-      const email = document.getElementById('auth-email').value;
+      const email = document.getElementById('auth-email').value.trim();
       const pw = document.getElementById('auth-pw').value;
       if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
       try {
@@ -409,6 +385,7 @@
       else { selectedSubjects = selectedSubjects.filter(s => s !== subjectName); }
     }
 
+    // 💡 게임 종료 시 Realtime DB 포맷에 맞추어 역순 정렬용 negScore 우회 가공 및 점수 등록
     async function endGame() {
       showView('view-result');
       document.getElementById('final-score').innerText = `${totalScore} 점`;
@@ -417,30 +394,45 @@
       if(currentUser) {
         try {
           const nickName = currentUser.email.split('@')[0];
-          await window.dbSet(window.dbDoc(window.fbDb, "rankings", currentUser.uid), {
+          await window.dbSet(window.dbRef(window.fbRtdb, "rankings/" + currentUser.uid), {
             username: nickName,
             score: totalScore,
+            negScore: -totalScore, // Realtime DB 내림차순 정렬 우회용 키값
             correct: correctCount,
             updatedAt: Date.now()
           });
-        } catch(e) { console.error("랭킹 등록 실패:", e); }
+        } catch(e) { console.error("Realtime DB 점수 등록 실패 (규칙을 확인하세요):", e); }
       }
     }
 
+    // 💡 Realtime DB 전용 실시간 랭킹 시스템 가동 (10명 타겟팅)
     function loadRanking() {
-      const q = window.dbQuery(window.dbCollection(window.fbDb, "rankings"), window.dbOrderBy("score", "desc"), window.dbLimit(10));
-      window.dbOnSnapshot(q, (snapshot) => {
+      const rankRef = window.dbRef(window.fbRtdb, "rankings");
+      const q = window.dbQuery(rankRef, window.dbOrderByChild("negScore"), window.dbLimitToLast(10));
+      
+      window.dbOnValue(q, (snapshot) => {
         const board = document.getElementById('ranking-board');
+        if(!board) return;
         board.innerHTML = '';
-        let rank = 1;
-        snapshot.forEach((doc) => {
-          const data = doc.data();
+        
+        if(!snapshot.exists()) return;
+
+        let rankList = [];
+        snapshot.forEach((childSnapshot) => {
+          rankList.push(childSnapshot.val());
+        });
+        
+        // 내림차순 최종 상위 스와핑 정렬 보정
+        rankList.sort((a, b) => b.score - a.score);
+
+        rankList.forEach((data, index) => {
           const li = document.createElement('li');
           li.className = 'ranking-item';
-          li.innerHTML = `<span><strong>${rank}위</strong>. ${data.username}</span> <span>${data.score}점</span>`;
+          li.innerHTML = `<span><strong>${index + 1}위</strong>. ${data.username}</span> <span>${data.score}점</span>`;
           board.appendChild(li);
-          rank++;
         });
+      }, (error) => {
+        console.error("랭킹 스트리밍 차단됨(보안 규칙 점검 필요):", error);
       });
     }
 
