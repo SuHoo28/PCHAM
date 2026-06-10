@@ -7,7 +7,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, collection, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     // Firebase 설정값 (기존 설정 유지)
     const firebaseConfig = {
@@ -31,6 +31,7 @@
     window.signUp = createUserWithEmailAndPassword;
     window.logOut = signOut;
     window.dbDoc = doc;
+    window.dbGetDoc = getDoc;
     window.dbSet = setDoc;
     window.dbCollection = collection;
     window.dbQuery = query;
@@ -45,11 +46,16 @@
     .container { width: min(600px, 92%); background: #ffffff; border-radius: 24px; padding: 28px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.16); text-align: center; position: relative; }
     h1 { margin: 0 0 8px; font-size: 28px; }
     .subtitle { color: #777; margin-bottom: 24px; font-size: 14px; }
-    .info { padding: 14px; margin-bottom: 20px; border-radius: 14px; background: #e8f5e9; color: #2e7d32; font-size: 14px; line-height: 1.6; text-align: left; }
     .hidden { display: none !important; }
     
+    /* 대시보드 스코어 보드 */
+    .score-dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .score-card { background: #f1f8ff; padding: 12px; border-radius: 12px; border: 1px solid #d0e8ff; }
+    .score-card .title { font-size: 12px; color: #666; font-weight: bold; margin-bottom: 4px; }
+    .score-card .value { font-size: 18px; color: #0366d6; font-weight: bold; }
+
     /* 입력 및 버튼 */
-    input[type="email"], input[type="password"] { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+    input[type="email"], input[type="password"], input[type="text"] { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
     .button-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
     button { border: none; border-radius: 12px; padding: 0 18px; height: 46px; font-size: 15px; cursor: pointer; transition: 0.15s; font-weight: bold; width: 100%; }
     button:hover { transform: translateY(-2px); opacity: 0.9; }
@@ -57,6 +63,7 @@
     .ask-btn { background: #42a5f5; color: white; }
     .clear-btn { background: #b0bec5; color: white; }
     .secondary-btn { background: #6c757d; color: white; }
+    .setting-btn { background: #ffb74d; color: white; }
 
     /* 과목 그리드 */
     .subject-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0; }
@@ -87,19 +94,18 @@
 
     .ranking-list { text-align: left; margin: 20px 0; padding: 0; list-style: none; }
     .ranking-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
+    .ranking-item.my-rank { background: #fffde7; border-radius: 6px; border: 1px solid #fff59d; }
     .status { min-height: 24px; color: #555; font-size: 14px; margin: 10px 0; }
     .help { margin-top: 12px; font-size: 13px; color: #777; text-align: left; line-height: 1.6; }
+
+    /* 토글 스위치 컴포넌트 */
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>AI 스피드 퀴즈 챌린지</h1>
-    <div class="subtitle">GitHub Pages + Google Apps Script + OpenAI API 연동 완료</div>
-
-    <div class="info">
-      현재 구조: GitHub Pages 화면 → Google Apps Script 서버 → OpenAI API → 답변 반환<br />
-      API Key는 index.html에 들어가지 않고 Apps Script의 <strong>스크립트 속성(Property)</strong>에 저장되어 안전합니다.
-    </div>
+    <div class="subtitle" id="user-welcome">실시간 맞춤형 학습 피드백 시스템</div>
 
     <div id="view-auth">
       <input type="email" id="auth-email" placeholder="이메일 주소">
@@ -111,6 +117,17 @@
     </div>
 
     <div id="view-lobby" class="hidden">
+      <div class="score-dashboard">
+        <div class="score-card">
+          <div class="title">⏱️ 직전 점수</div>
+          <div class="value" id="lobby-last-score">0점</div>
+        </div>
+        <div class="score-card">
+          <div class="title">🏆 내 최고 점수</div>
+          <div class="value" id="lobby-best-score">0점</div>
+        </div>
+      </div>
+
       <p>문제를 풀 과목을 선택하세요 (다중 선택 가능)</p>
       <div class="subject-grid">
         <button class="subject-btn" onclick="toggleSubject(this, '국어')">국어</button>
@@ -120,10 +137,33 @@
         <button class="subject-btn" onclick="toggleSubject(this, '영어')">영어</button>
       </div>
       <div class="button-row">
-        <button class="clear-btn" onclick="goLobby()">선택 초기화</button>
         <button class="ask-btn" id="askBtn" onclick="prepareGame()">퀴즈 생성 및 게임 시작</button>
+        <button class="setting-btn" onclick="showSettingView()">⚙️ 게임 및 프로필 설정</button>
       </div>
+      
+      <hr style="margin: 25px 0; border: 0; border-top: 1px solid #eee;">
+      <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
+      <ul id="lobby-ranking-board" class="ranking-list"></ul>
+
       <button onclick="handleLogout()" class="secondary-btn" style="margin-top: 15px;">로그아웃</button>
+    </div>
+
+    <div id="view-setting" class="hidden">
+      <h2>⚙️ 게임 및 프로필 설정</h2>
+      <div style="text-align: left; margin-bottom: 15px;">
+        <label style="font-weight: bold; font-size: 14px;">플레이어 닉네임 변경</label>
+        <input type="text" id="setting-nickname" placeholder="랭킹에 표시될 닉네임을 적어주세요.">
+      </div>
+      
+      <div class="toggle-row">
+        <span style="font-weight: bold; font-size: 14px;">🔊 문제 및 카테고리 TTS 음성 안내</span>
+        <input type="checkbox" id="setting-tts-toggle" checked style="width: 20px; height: 20px; cursor: pointer;">
+      </div>
+
+      <div class="button-row" style="margin-top: 25px;">
+        <button class="ask-btn" onclick="saveSettings()">설정 저장 및 보관</button>
+        <button class="clear-btn" onclick="goLobby()">취소 및 대기실로</button>
+      </div>
     </div>
 
     <div id="view-loading" class="hidden">
@@ -150,10 +190,7 @@
       <h2>🎉 게임 종료!</h2>
       <h1 id="final-score" style="color: #42a5f5; margin: 10px 0;">0점</h1>
       <p id="game-summary">20문제 중 X문제를 맞추셨습니다!</p>
-      <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
-      <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
-      <ul id="ranking-board" class="ranking-list"></ul>
-      <button onclick="goLobby()" style="background: #e67e22; color: white;">다시 도전하기</button>
+      <button onclick="goLobby()" style="background: #e67e22; color: white;">대기실로 돌아가기</button>
     </div>
 
     <div class="help">
@@ -163,10 +200,14 @@
   </div>
 
   <script>
-    // 🔗 새로 발급하신 따끈따끈한 새 배포 URL 적용 완료!
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxkJ4xGW7j1RxKWQ-8bbmGSDFQ1ia8u4DZZeFraAnaQ9lGFnrVHqb_rWVskf9eVKrN3/exec';
 
     let currentUser = null;
+    let userNickname = "";
+    let userBestScore = 0;
+    let userLastScore = 0;
+    let isTtsEnabled = true;
+
     let selectedSubjects = [];
     let gameQuizzes = [];
     let currentQuizIdx = 0;
@@ -180,7 +221,6 @@
     const askBtn = document.getElementById('askBtn');
     const statusBox = document.getElementById('status');
 
-    // Ctrl + Enter 단축키 이벤트 바인딩
     window.addEventListener('keydown', function(event) {
       if (event.key === 'Enter' && event.ctrlKey) {
         const lobbyVisible = !document.getElementById('view-lobby').classList.contains('hidden');
@@ -191,7 +231,7 @@
     });
 
     function showView(viewId) {
-      ['view-auth', 'view-lobby', 'view-loading', 'view-game', 'view-result'].forEach(id => {
+      ['view-auth', 'view-lobby', 'view-setting', 'view-loading', 'view-game', 'view-result'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
       });
       document.getElementById(viewId).classList.remove('hidden');
@@ -205,6 +245,7 @@
     }
 
     function speakText(text) {
+      if (!isTtsEnabled) return; // 설정에서 배제 시 소리 출력 차단
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ko-KR';
@@ -212,10 +253,42 @@
       window.speechSynthesis.speak(u);
     }
 
-    /* ChatGPT 연동 및 문제 패키징 가동 함수 */
+    /* 설정창 로드 및 연동 함수 */
+    function showSettingView() {
+      document.getElementById('setting-nickname').value = userNickname;
+      document.getElementById('setting-tts-toggle').checked = isTtsEnabled;
+      showView('view-setting');
+    }
+
+    async function saveSettings() {
+      const inputNick = document.getElementById('setting-nickname').value.trim();
+      if(!inputNick) return alert("닉네임을 한 글자 이상 작성해주세요.");
+
+      isTtsEnabled = document.getElementById('setting-tts-toggle').checked;
+      userNickname = inputNick;
+
+      if(currentUser) {
+        try {
+          // profiles 컬렉션에 유저 개인 커스텀 설정 정보 기입
+          await window.dbSet(window.dbDoc(window.fbDb, "profiles", currentUser.uid), {
+            nickname: userNickname,
+            isTtsEnabled: isTtsEnabled,
+            lastScore: userLastScore,
+            bestScore: userBestScore
+          }, { merge: true });
+          
+          alert("설정이 저장되었습니다.");
+          goLobby();
+        } catch(e) {
+          alert("설정 보관에 실패했습니다: " + e.message);
+        }
+      }
+    }
+
+    /* ChatGPT 연동 및 문제 생성 */
     async function prepareGame() {
       if(selectedSubjects.length === 0) {
-        alert('질문(과목)을 최소 1개 이상 선택해주세요.');
+        alert('과목을 최소 1개 이상 선택해주세요.');
         return;
       }
 
@@ -231,19 +304,14 @@
 
         const response = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
-          body: JSON.stringify({
-            question: prompt
-          })
+          body: JSON.stringify({ question: prompt })
         });
 
         barFill.style.width = '60%';
         statusBox.textContent = '답변을 생성하는 중입니다...';
 
         const data = await response.json();
-
-        if (data.error) {
-          throw new Error(data.error);
-        }
+        if (data.error) throw new Error(data.error);
 
         let quizData = data.answer;
         if (typeof quizData === 'string') {
@@ -255,24 +323,16 @@
           gameQuizzes = quizData || data;
         }
 
-        if (!Array.isArray(gameQuizzes) || gameQuizzes.length === 0) {
-          throw new Error("유효한 문제 리스트 데이터 포맷이 아닙니다.");
-        }
-
         barFill.style.width = '90%';
         statusBox.textContent = '문항 배치 및 문제 셔플 완료';
-
-        // 무작위 셔플
         gameQuizzes.sort(() => Math.random() - 0.5);
 
         setTimeout(() => {
           barFill.style.width = '100%';
-          statusBox.textContent = '답변 생성 완료';
-          
+          showView('view-game');
           currentQuizIdx = 0;
           totalScore = 0;
           correctCount = 0;
-          showView('view-game');
           renderQuiz();
           setLoading(false);
         }, 600);
@@ -280,7 +340,6 @@
       } catch (error) {
         console.error(error);
         alert('오류가 발생했습니다.\n\n' + error.message);
-        statusBox.textContent = '요청 실패';
         setLoading(false);
         goLobby();
       }
@@ -319,12 +378,10 @@
       clearInterval(timerInterval);
       quizStartTime = Date.now();
       const bar = document.getElementById('timerBar');
-      
       timerInterval = setInterval(() => {
         const elapsed = (Date.now() - quizStartTime) / 1000;
         const remainPercent = Math.max(0, ((LIMIT_TIME - elapsed) / LIMIT_TIME) * 100);
         bar.style.width = remainPercent + '%';
-
         if(elapsed >= LIMIT_TIME) {
           clearInterval(timerInterval);
           handleAnswer(-1);
@@ -350,31 +407,107 @@
         earnedScore = 100 + bonus;
         totalScore += earnedScore;
         correctCount++;
-
         document.getElementById(`opt-btn-${chosenIdx}`).classList.add('correct-flash');
         feedbackContainer.innerHTML = `<div class="score-popup plus">+${earnedScore}점!</div>`;
-      } 
-      else {
-        if(chosenIdx !== -1) {
-          document.getElementById(`opt-btn-${chosenIdx}`).classList.add('wrong-flash');
-        }
-        if(document.getElementById(`opt-btn-${quiz.a}`)) {
-          document.getElementById(`opt-btn-${quiz.a}`).classList.add('correct-flash');
-        }
+      } else {
+        if(chosenIdx !== -1) document.getElementById(`opt-btn-${chosenIdx}`).classList.add('wrong-flash');
+        if(document.getElementById(`opt-btn-${quiz.a}`)) document.getElementById(`opt-btn-${quiz.a}`).classList.add('correct-flash');
         feedbackContainer.innerHTML = `<div class="score-popup minus">틀렸습니다! 0점</div>`;
       }
 
       document.getElementById('quiz-score').innerText = `점수: ${totalScore}점`;
-
       currentQuizIdx++;
       setTimeout(renderQuiz, 800);
     }
 
-    /* Firebase 인증 및 데이터베이스 트리거 */
+    /* 유저 동기화 정보 취득 및 가공 */
+    async function syncUserData(user) {
+      if(!user) return;
+      
+      // 1. 프로필 수집 확인
+      const profileRef = window.dbDoc(window.fbDb, "profiles", user.uid);
+      const profileSnap = await window.dbGetDoc(profileRef);
+
+      if(profileSnap.exists()) {
+        const pData = profileSnap.data();
+        userNickname = pData.nickname || user.email.split('@')[0];
+        isTtsEnabled = pData.isTtsEnabled !== undefined ? pData.isTtsEnabled : true;
+        userBestScore = pData.bestScore || 0;
+        userLastScore = pData.lastScore || 0;
+      } else {
+        // 프로필이 없는 신규 회원 초기값 배정
+        userNickname = user.email.split('@')[0];
+        isTtsEnabled = true;
+        userBestScore = 0;
+        userLastScore = 0;
+        await window.dbSet(profileRef, {
+          nickname: userNickname,
+          isTtsEnabled: isTtsEnabled,
+          bestScore: 0,
+          lastScore: 0
+        });
+      }
+
+      // 대기실 데이터 매핑
+      document.getElementById('user-welcome').innerText = `${userNickname}님, 환영합니다!`;
+      document.getElementById('lobby-last-score').innerText = `${userLastScore}점`;
+      document.getElementById('lobby-best-score').innerText = `${userBestScore}점`;
+    }
+
+    /* 게임 종료 및 서버 데이터 백업 */
+    async function endGame() {
+      showView('view-result');
+      document.getElementById('final-score').innerText = `${totalScore} 점`;
+      document.getElementById('game-summary').innerText = `20문제 중 총 ${correctCount}문제를 맞추셨습니다!`;
+
+      userLastScore = totalScore;
+      if(totalScore > userBestScore) {
+        userBestScore = totalScore;
+      }
+
+      if(currentUser) {
+        try {
+          // 1. 프로필 정보 갱신 (대시보드용)
+          await window.dbSet(window.dbDoc(window.fbDb, "profiles", currentUser.uid), {
+            lastScore: userLastScore,
+            bestScore: userBestScore
+          }, { merge: true });
+
+          // 2. 통합 랭킹 테이블 전송
+          await window.dbSet(window.dbDoc(window.fbDb, "rankings", currentUser.uid), {
+            username: userNickname, // 설정한 고유 닉네임 사용!
+            score: userBestScore,
+            updatedAt: Date.now()
+          });
+        } catch(e) { console.error("데이터 백업 실패:", e); }
+      }
+    }
+
+    /* 실시간 통합 랭킹 보드 출력 */
+    function loadRanking() {
+      const q = window.dbQuery(window.dbCollection(window.fbDb, "rankings"), window.dbOrderBy("score", "desc"), window.dbLimit(10));
+      window.dbOnSnapshot(q, (snapshot) => {
+        const board = document.getElementById('lobby-ranking-board');
+        board.innerHTML = '';
+        let rank = 1;
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const li = document.createElement('li');
+          // 본인 랭킹 강조 표시 클래스 추가
+          li.className = `ranking-item ${data.username === userNickname ? 'my-rank' : ''}`;
+          li.innerHTML = `<span><strong>${rank}위</strong>. ${data.username}</span> <span>${data.score}점</span>`;
+          board.appendChild(li);
+          rank++;
+        });
+      });
+    }
+
+    /* Firebase 인증 이벤트 감지기 */
     setTimeout(() => {
-      window.fbAuth.onAuthStateChanged(user => {
+      window.fbAuth.onAuthStateChanged(async (user) => {
         if (user) {
           currentUser = user;
+          await syncUserData(user);
           showView('view-lobby');
           loadRanking();
         } else {
@@ -409,44 +542,10 @@
       else { selectedSubjects = selectedSubjects.filter(s => s !== subjectName); }
     }
 
-    async function endGame() {
-      showView('view-result');
-      document.getElementById('final-score').innerText = `${totalScore} 점`;
-      document.getElementById('game-summary').innerText = `20문제 중 총 ${correctCount}문제를 맞추셨습니다!`;
-
-      if(currentUser) {
-        try {
-          const nickName = currentUser.email.split('@')[0];
-          await window.dbSet(window.dbDoc(window.fbDb, "rankings", currentUser.uid), {
-            username: nickName,
-            score: totalScore,
-            correct: correctCount,
-            updatedAt: Date.now()
-          });
-        } catch(e) { console.error("랭킹 등록 실패:", e); }
-      }
-    }
-
-    function loadRanking() {
-      const q = window.dbQuery(window.dbCollection(window.fbDb, "rankings"), window.dbOrderBy("score", "desc"), window.dbLimit(10));
-      window.dbOnSnapshot(q, (snapshot) => {
-        const board = document.getElementById('ranking-board');
-        board.innerHTML = '';
-        let rank = 1;
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          const li = document.createElement('li');
-          li.className = 'ranking-item';
-          li.innerHTML = `<span><strong>${rank}위</strong>. ${data.username}</span> <span>${data.score}점</span>`;
-          board.appendChild(li);
-          rank++;
-        });
-      });
-    }
-
     function goLobby() {
       selectedSubjects = [];
       document.querySelectorAll('.subject-btn').forEach(b => b.classList.remove('active'));
+      if(currentUser) syncUserData(currentUser);
       showView('view-lobby');
     }
   </script>
