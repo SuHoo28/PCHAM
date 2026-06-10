@@ -114,7 +114,7 @@
     <div class="bar-container">
       <div id="loadingBarFill" class="bar-fill"></div>
     </div>
-    <p style="color: #666; font-size: 14px;" id="loading-subtext">새로 지정한 대현고 GAS 서버의 ChatGPT가 문제를 조합하고 있습니다.</p>
+    <p style="color: #666; font-size: 14px;" id="loading-subtext">새로 지정한 공개용 GAS 서버의 ChatGPT가 문제를 조합하고 있습니다.</p>
   </div>
 
   <div id="view-game" class="card hidden">
@@ -141,8 +141,8 @@
   </div>
 
   <script>
-    // 🔗 사용자가 전달해 준 '대현고등학교 워크스페이스' 배포 주소 연동 완료!
-    const GAS_WEB_APP_URL = 'https://script.google.com/a/macros/daehyun.hs.kr/s/AKfycbyNwUxcFbzpKlcTgh5RTx00NvB9W3Om_2Hrx6wjO6PN3lgTBFgcpXMUBAPj1Ls30qhk/exec';
+    // 🔗 새로 발급하신 '모두에게 공개'된 구글 웹 앱 주소 바인딩 완료!
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyW8VF_agmZ-TGwhXA02rR3TGGkUvGG2Us2P0gOqiAzhuaPJwtsfC66ihzR5dAKLup0/exec';
 
     let currentUser = null;
     let selectedSubjects = [];
@@ -164,7 +164,14 @@
 
     function speakText(text) {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = new SynthesisUtterance ? new SpeechSynthesisUtterance(text) : null;
+      if(!utterance) {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ko-KR';
+        u.rate = 1.1; 
+        window.speechSynthesis.speak(u);
+        return;
+      }
       utterance.lang = 'ko-KR';
       utterance.rate = 1.1; 
       window.speechSynthesis.speak(utterance);
@@ -182,14 +189,14 @@
       const barFill = document.getElementById('loadingBarFill');
       
       barFill.style.width = '25%';
-      statusText.innerText = "📡 학교 GAS 서버에 파라미터 전송 중...";
-      subtext.innerText = `선택 과목 [ ${selectedSubjects.join(', ')} ] 정렬 완료`;
+      statusText.innerText = "📡 공개 GAS 서버에 데이터 전송 중...";
+      subtext.innerText = `선택 과목 [ ${selectedSubjects.join(', ')} ] 패키징 중`;
 
-      // ChatGPT가 구조화된 퀴즈만 뱉도록 유도하는 정밀 프롬프트
+      // ChatGPT가 순수한 JSON 배열 구조만 뽑도록 유도하는 정밀 프롬프트
       const finalQuestionPrompt = `사용자가 고른 과목은 [${selectedSubjects.join(', ')}] 입니다. 이 과목들을 조합하여 고등학교 수준의 객관식 4지선다형 문제를 총 20개 출제해주세요. 결과는 반드시 부연 설명이나 마크다운 표기(\`\`\`json 등) 없이 순수한 JSON 배열 포맷만 반환해야 합니다. 내부 객체 구조는 {"subject": "과목명", "q": "문제 내용", "o": ["보기1","보기2","보기3","보기4"], "a": 정답인덱스숫자0~3} 구조를 정확히 지켜주세요.`;
 
       try {
-        setTimeout(() => { barFill.style.width = '55%'; statusText.innerText = "⚡ 서버 내부에서 ChatGPT 연산 가동 중..."; }, 800);
+        setTimeout(() => { barFill.style.width = '55%'; statusText.innerText = "⚡ ChatGPT 서버 내부 연산 및 문제 출제 중..."; }, 800);
 
         // 앱 스크립트에 POST 통신 시도
         const response = await fetch(GAS_WEB_APP_URL, {
@@ -199,7 +206,7 @@
           })
         });
         
-        if (!response.ok) throw new Error("서버 대역폭 오류 또는 권한 승인 거부");
+        if (!response.ok) throw new Error("서버 응답 거부 또는 네트워크 오류");
         
         const data = await response.json();
         
@@ -209,7 +216,7 @@
 
         let quizData = data.answer;
         if (typeof quizData === 'string') {
-          // 백틱(```json) 예외 필터링 처리
+          // 혹시 모를 백틱(```json) 마크다운 코드 필터링 처리
           if (quizData.startsWith("```")) {
             quizData = quizData.replace(/```json|```/g, "").trim();
           }
@@ -219,13 +226,13 @@
         }
 
         if (!Array.isArray(gameQuizzes) || gameQuizzes.length === 0) {
-          throw new Error("서버로부터 정상적인 문제 리스트를 받아오지 못했습니다.");
+          throw new Error("유효한 문제 리스트 데이터 포맷이 아닙니다.");
         }
 
         barFill.style.width = '85%';
-        statusText.innerText = "🔀 20문항 패키징 및 셔플(무작위 정렬) 완료!";
+        statusText.innerText = "🔀 20문항 로드 및 문제 셔플 완료!";
 
-        // 순서 섞기
+        // 문제 순서 무작위로 섞기
         gameQuizzes.sort(() => Math.random() - 0.5);
 
         setTimeout(() => {
@@ -243,7 +250,7 @@
 
       } catch (error) {
         console.error("통신 실패 비상 로그:", error);
-        alert("앱 스크립트 서버 연결 실패!\n원인: " + error.message + "\n\n💡 해결 팁: 학교 워크스페이스 계정(/a/daehyun.hs.kr) 배포의 경우, GAS 배포 설정 시 [액세스할 수 있는 사용자]가 '모든 사용자(Anyone)'로 되어 있는지 반드시 에디터에서 다시 확인해보세요!");
+        alert("문제를 가져오지 못했습니다.\n오류내용: " + error.message + "\n\n💡 팁: 만약 여전히 안 된다면 구글 앱 스크립트 코드 수정 후 [배포] -> [새 배포]로 버전 번호를 올려 새로 배포했는지 체크해 보세요!");
         goLobby();
       }
     }
@@ -308,7 +315,6 @@
       const feedbackContainer = document.getElementById('feedback-container');
       let earnedScore = 0;
 
-      // 정답 판정 및 UI 처리
       if(String(chosenIdx) === String(quiz.a)) {
         const bonus = Math.max(0, Math.round((LIMIT_TIME - elapsed) * 5));
         earnedScore = 100 + bonus;
@@ -318,7 +324,6 @@
         document.getElementById(`opt-btn-${chosenIdx}`).classList.add('correct-flash');
         feedbackContainer.innerHTML = `<div class="score-popup plus">+${earnedScore}점!</div>`;
       } 
-      // 오답 또는 시간 초과 판정 처리
       else {
         if(chosenIdx !== -1) {
           document.getElementById(`opt-btn-${chosenIdx}`).classList.add('wrong-flash');
