@@ -7,9 +7,10 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    // 💡 Firestore 대신 Realtime Database SDK 로드 완료
+    import { getDatabase, ref, set, get, child, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // Firebase 설정값 (기존 설정 유지)
+    // Firebase 설정값
     const firebaseConfig = {
       apiKey: "AIzaSyBgA0Pi_wRXAW4cTbDDybkJtJtJWBcft1c",
       authDomain: "pppp-2272a.firebaseapp.com",
@@ -23,21 +24,23 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    const rtdb = getDatabase(app); // Realtime DB 객체 생성
 
+    // 전역 윈도우 바인딩 (레거시 코드 매핑 대응)
     window.fbAuth = auth;
-    window.fbDb = db;
+    window.fbRtdb = rtdb;
     window.signIn = signInWithEmailAndPassword;
     window.signUp = createUserWithEmailAndPassword;
     window.logOut = signOut;
-    window.dbDoc = doc;
-    window.dbGetDoc = getDoc;
-    window.dbSet = setDoc;
-    window.dbCollection = collection;
+    
+    window.dbRef = ref;
+    window.dbSet = set;
+    window.dbGet = get;
+    window.dbChild = child;
+    window.dbOnValue = onValue;
     window.dbQuery = query;
-    window.dbOrderBy = orderBy;
-    window.dbLimit = limit;
-    window.dbOnSnapshot = onSnapshot;
+    window.dbOrderByChild = orderByChild;
+    window.dbLimitToLast = limitToLast;
   </script>
 
   <style>
@@ -142,7 +145,7 @@
       </div>
       
       <hr style="margin: 25px 0; border: 0; border-top: 1px solid #eee;">
-      <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
+      <h3>🏆 실시간 통합 랭킹 TOP 10 (Realtime DB)</h3>
       <ul id="lobby-ranking-board" class="ranking-list"></ul>
 
       <button onclick="handleLogout()" class="secondary-btn" style="margin-top: 15px;">로그아웃</button>
@@ -194,8 +197,7 @@
     </div>
 
     <div class="help">
-      단축키: 대기실 화면에서 Ctrl + Enter를 누르면 선택한 과목으로 게임이 바로 전송 및 시작됩니다.<br />
-      오류가 발생하면 Apps Script 배포 권한이 “모든 사용자”인지 확인하세요.
+      단축키: 대기실 화면에서 Ctrl + Enter를 누르면 선택한 과목으로 게임이 바로 전송 및 시작됩니다.
     </div>
   </div>
 
@@ -223,8 +225,7 @@
 
     window.addEventListener('keydown', function(event) {
       if (event.key === 'Enter' && event.ctrlKey) {
-        const lobbyVisible = !document.getElementById('view-lobby').classList.contains('hidden');
-        if (lobbyVisible) {
+        if (!document.getElementById('view-lobby').classList.contains('hidden')) {
           prepareGame();
         }
       }
@@ -244,11 +245,8 @@
       }
     }
 
-    /* 🛠️ 버그 수정: TTS 인터페이스 문법 오류 제거 및 안전성 확보 */
     function speakText(text) {
-      if (!isTtsEnabled) return; 
-      if (!window.speechSynthesis) return;
-      
+      if (!isTtsEnabled || !window.speechSynthesis) return;
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ko-KR';
@@ -262,6 +260,7 @@
       showView('view-setting');
     }
 
+    // 💡 Realtime Database 전용 설정 저장 오퍼레이션
     async function saveSettings() {
       const inputNick = document.getElementById('setting-nickname').value.trim();
       if(!inputNick) return alert("닉네임을 한 글자 이상 작성해주세요.");
@@ -271,14 +270,13 @@
 
       if(currentUser) {
         try {
-          await window.dbSet(window.dbDoc(window.fbDb, "profiles", currentUser.uid), {
+          await window.dbSet(window.dbRef(window.fbRtdb, "profiles/" + currentUser.uid), {
             nickname: userNickname,
             isTtsEnabled: isTtsEnabled,
             lastScore: userLastScore,
             bestScore: userBestScore
-          }, { merge: true });
-          
-          alert("설정이 저장되었습니다.");
+          });
+          alert("설정이 Realtime DB에 저장되었습니다.");
           goLobby();
         } catch(e) {
           alert("설정 보관에 실패했습니다: " + e.message);
@@ -420,16 +418,15 @@
       setTimeout(renderQuiz, 800);
     }
 
-    /* 🛠️ 버그 수정: 비동기 데이터 획득 순서 체계 재조정 */
+    // 💡 Realtime Database 전용 유저 데이터 동기화
     async function syncUserData(user) {
       if(!user) return;
-      
       try {
-        const profileRef = window.dbDoc(window.fbDb, "profiles", user.uid);
-        const profileSnap = await window.dbGetDoc(profileRef);
+        const dbRef = window.dbRef(window.fbRtdb);
+        const snapshot = await window.dbGet(window.dbChild(dbRef, `profiles/${user.uid}`));
 
-        if(profileSnap.exists()) {
-          const pData = profileSnap.data();
+        if(snapshot.exists()) {
+          const pData = snapshot.val();
           userNickname = pData.nickname || user.email.split('@')[0];
           isTtsEnabled = pData.isTtsEnabled !== undefined ? pData.isTtsEnabled : true;
           userBestScore = pData.bestScore || 0;
@@ -439,7 +436,7 @@
           isTtsEnabled = true;
           userBestScore = 0;
           userLastScore = 0;
-          await window.dbSet(profileRef, {
+          await window.dbSet(window.dbRef(window.fbRtdb, "profiles/" + user.uid), {
             nickname: userNickname,
             isTtsEnabled: isTtsEnabled,
             bestScore: 0,
@@ -451,10 +448,11 @@
         document.getElementById('lobby-last-score').innerText = `${userLastScore}점`;
         document.getElementById('lobby-best-score').innerText = `${userBestScore}점`;
       } catch (e) {
-        console.error("사용자 정보 동기화 실패:", e);
+        console.error("Realtime DB 연동 실패:", e);
       }
     }
 
+    // 💡 Realtime Database 전용 게임 종료 정보 트리거
     async function endGame() {
       showView('view-result');
       document.getElementById('final-score').innerText = `${totalScore} 점`;
@@ -469,70 +467,91 @@
         try {
           const finalName = userNickname || currentUser.email.split('@')[0];
           
-          await window.dbSet(window.dbDoc(window.fbDb, "profiles", currentUser.uid), {
+          await window.dbSet(window.dbRef(window.fbRtdb, "profiles/" + currentUser.uid), {
+            nickname: finalName,
+            isTtsEnabled: isTtsEnabled,
             lastScore: userLastScore,
             bestScore: userBestScore
-          }, { merge: true });
+          });
 
-          await window.dbSet(window.dbDoc(window.fbDb, "rankings", currentUser.uid), {
+          // 랭킹 저장 시 역순 정렬 가공을 위한 음수 스코어 우회 가공(Realtime DB 전용 테크닉)
+          await window.dbSet(window.dbRef(window.fbRtdb, "rankings/" + currentUser.uid), {
             username: finalName, 
             score: userBestScore,
+            negScore: -userBestScore, 
             updatedAt: Date.now()
           });
-        } catch(e) { console.error("데이터 백업 실패:", e); }
+        } catch(e) { console.error("Realtime DB 결과 업로드 실패:", e); }
       }
     }
 
+    // 💡 Realtime Database 전용 실시간 랭킹 보드 출력 기믹
     function loadRanking() {
-      const q = window.dbQuery(window.dbCollection(window.fbDb, "rankings"), window.dbOrderBy("score", "desc"), window.dbLimit(10));
-      window.dbOnSnapshot(q, (snapshot) => {
+      // 내림차순 지원을 위해 가공한 negScore 기준으로 정렬 쿼리 컴파일
+      const rankRef = window.dbRef(window.fbRtdb, "rankings");
+      const q = window.dbQuery(rankRef, window.dbOrderByChild("negScore"), window.dbLimitToLast(10));
+      
+      window.dbOnValue(q, (snapshot) => {
         const board = document.getElementById('lobby-ranking-board');
         board.innerHTML = '';
-        let rank = 1;
-        snapshot.forEach((doc) => {
-          const data = doc.data();
+        if(!snapshot.exists()) return;
+
+        let rankList = [];
+        snapshot.forEach((childSnapshot) => {
+          rankList.push(childSnapshot.val());
+        });
+        
+        // 정렬 순서 보정
+        rankList.sort((a, b) => b.score - a.score);
+
+        rankList.forEach((data, index) => {
           const li = document.createElement('li');
           li.className = `ranking-item ${data.username === userNickname ? 'my-rank' : ''}`;
-          li.innerHTML = `<span><strong>${rank}위</strong>. ${data.username}</span> <span>${data.score}점</span>`;
+          li.innerHTML = `<span><strong>${index + 1}위</strong>. ${data.username}</span> <span>${data.score}점</span>`;
           board.appendChild(li);
-          rank++;
         });
       });
     }
 
-    /* 🛠️ 버그 수정: 인증 성공 후 데이터를 완벽히 가져온 뒤 뷰(View)를 전환하도록 수정 */
-    setTimeout(() => {
-      window.fbAuth.onAuthStateChanged(async (user) => {
-        if (user) {
-          currentUser = user;
-          await syncUserData(user); 
-          showView('view-lobby');
-          loadRanking();
-        } else {
-          currentUser = null;
-          showView('view-auth');
-        }
-      });
-    }, 1000);
+    /* 🛠️ 완벽 고정된 로그인 및 인증 인터셉터 */
+    window.fbAuth.onAuthStateChanged(async (user) => {
+      if (user) {
+        currentUser = user;
+        await syncUserData(user); 
+        showView('view-lobby');
+        loadRanking();
+      } else {
+        currentUser = null;
+        showView('view-auth');
+      }
+    });
 
     async function handleLogin() {
-      const email = document.getElementById('auth-email').value;
+      const email = document.getElementById('auth-email').value.trim();
       const pw = document.getElementById('auth-pw').value;
       if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
-      try { await window.signIn(window.fbAuth, email, pw); } catch(e) { alert('로그인 실패: ' + e.message); }
+      try { 
+        await window.signIn(window.fbAuth, email, pw); 
+      } catch(e) { 
+        alert('로그인 실패: ' + e.message); 
+      }
     }
 
     async function handleSignUp() {
-      const email = document.getElementById('auth-email').value;
+      const email = document.getElementById('auth-email').value.trim();
       const pw = document.getElementById('auth-pw').value;
       if(!email || !pw) return alert('이메일과 비밀번호를 채워주세요.');
       try {
         await window.signUp(window.fbAuth, email, pw);
-        alert('회원가입 성공!');
-      } catch(e) { alert('회원가입 실패: ' + e.message); }
+        alert('회원가입 성공! 로그인 상태로 전환됩니다.');
+      } catch(e) { 
+        alert('회원가입 실패: ' + e.message); 
+      }
     }
 
-    function handleLogout() { window.logOut(window.fbAuth); }
+    function handleLogout() { 
+      window.logOut(window.fbAuth); 
+    }
 
     function toggleSubject(btn, subjectName) {
       btn.classList.toggle('active');
