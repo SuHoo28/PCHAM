@@ -43,10 +43,22 @@
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; background: linear-gradient(135deg, #e3f2fd, #fce4ec); font-family: Arial, sans-serif; color: #333; display: flex; justify-content: center; align-items: center; padding: 20px; }
-    .container { width: min(600px, 92%); background: #ffffff; border-radius: 24px; padding: 28px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.16); text-align: center; position: relative; }
+    .container { width: min(650px, 95%); background: #ffffff; border-radius: 24px; padding: 28px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.16); text-align: center; position: relative; }
     h1 { margin: 0 0 8px; font-size: 28px; }
     .subtitle { color: #777; margin-bottom: 24px; font-size: 14px; }
-    .info { padding: 14px; margin-bottom: 20px; border-radius: 14px; background: #e8f5e9; color: #2e7d32; font-size: 14px; line-height: 1.6; text-align: left; }
+    
+    /* 🏆 상단 실시간 스크롤 랭킹판 (초록 박스 대개조) */
+    .info { padding: 10px; margin-bottom: 12px; border-radius: 14px; background: #e8f5e9; color: #2e7d32; font-size: 13px; text-align: left; }
+    .ranking-scroll-box { max-height: 110px; overflow-y: auto; padding-right: 5px; margin-top: 5px; list-style: none; padding-left: 0; }
+    .ranking-scroll-box::-webkit-scrollbar { width: 6px; }
+    .ranking-scroll-box::-webkit-scrollbar-thumb { background: #a5d6a7; border-radius: 4px; }
+    .scroll-item { display: flex; justify-content: space-between; padding: 4px 6px; border-bottom: 1px dashed #c8e6c9; font-size: 12px; }
+    .scroll-item:nth-child(1) { background: #fff9c4; font-weight: bold; } /* 1등 강조 */
+
+    /* 📊 내 전용 스태츠 대시보드 레이아웃 */
+    .my-stats-dashboard { display: flex; justify-content: space-between; background: #efebe9; padding: 10px 14px; border-radius: 12px; margin-bottom: 20px; font-size: 13px; color: #4e342e; font-weight: bold; }
+    .stat-badge { background: #ffffff; padding: 4px 10px; border-radius: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
     .hidden { display: none !important; }
     
     /* 입력 및 버튼 */
@@ -86,7 +98,7 @@
       100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
     }
 
-    /* 랭킹 스타일 디자인 개선 */
+    /* 하단 결과창 랭킹 목록 스타일 기조 유지 */
     .ranking-list { text-align: left; margin: 20px 0; padding: 0; list-style: none; }
     .ranking-item { display: flex; flex-direction: column; padding: 12px; border-bottom: 1px solid #eee; gap: 4px; }
     .ranking-main { display: flex; justify-content: space-between; font-size: 16px; }
@@ -95,7 +107,7 @@
     .help { margin-top: 12px; font-size: 13px; color: #777; text-align: left; line-height: 1.6; }
 
     /* 설정창(모달) 스타일 */
-    .settings-btn { position: absolute; top: 20px; right: 20px; font-size: 24px; cursor: pointer; background: transparent; border: none; width: auto; height: auto; padding: 0; }
+    .settings-btn { position: absolute; top: 20px; right: 20px; font-size: 24px; cursor: pointer; background: transparent; border: none; width: auto; height: auto; padding: 0; z-index: 5; }
     .settings-btn:hover { transform: rotate(45deg); }
     .setting-row { margin: 16px 0; text-align: left; }
     .setting-row label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; }
@@ -109,7 +121,21 @@
     <h1>AI 스피드 퀴즈 챌린지</h1>
     <div class="subtitle">GitHub Pages + Google Apps Script + Realtime DB 연동</div>
 
+    <div id="top-rank-container" class="info hidden">
+      <strong>🏆 실시간 통합 랭킹 TOP 50 (스크롤 가능)</strong>
+      <ul id="top-ranking-scroll" class="ranking-scroll-box">
+        <li class="scroll-item">랭킹 데이터를 불러오는 중입니다...</li>
+      </ul>
+    </div>
+
+    <div id="my-stats-container" class="my-stats-dashboard hidden">
+      <div class="stat-badge">🏅 내 등수: <span id="my-rank-txt">-위</span></div>
+      <div class="stat-badge">🔥 최고 점수: <span id="my-high-txt">0점</span></div>
+      <div class="stat-badge">⏱️ 직전 점수: <span id="my-last-txt">0점</span></div>
+    </div>
+
     <div id="view-auth">
+      <div class="info" style="text-align:center;">로그인 하시면 상단 실시간 랭킹판과 개인 대시보드가 활성화됩니다.</div>
       <input type="email" id="auth-email" placeholder="이메일 주소">
       <input type="password" id="auth-pw" placeholder="비밀번호 (6자리 이상)">
       <div class="button-row">
@@ -183,6 +209,7 @@
       <h2>🎉 게임 종료!</h2>
       <h1 id="final-score" style="color: #42a5f5; margin: 10px 0;">0점</h1>
       <p id="game-summary">20문제 중 X문제를 맞추셨습니다!</p>
+      <p id="game-duration" style="font-size:14px; color:#555; font-weight:bold;">총 소요 시간: 0분 0초</p>
       <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
       <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
       <ul id="ranking-board" class="ranking-list"></ul>
@@ -213,9 +240,16 @@
     let quizStartTime = 0;
     const LIMIT_TIME = 60; 
 
-    // TTS 설정 기본값 전역 변수화
+    // 게임 전체 플레이 타임 측정용 변수
+    let gamePlayStartTime = 0;
+    let finalElapsedTimeStr = "0초";
+
     let ttsRate = 1.1;
     let ttsPitch = 1.0;
+
+    // 개인기록 바인딩 캐싱 변수
+    let myHighScore = 0;
+    let myLastScore = 0;
 
     const askBtn = document.getElementById('askBtn');
     const statusBox = document.getElementById('status');
@@ -234,11 +268,16 @@
       });
       document.getElementById(viewId).classList.remove('hidden');
 
-      // 톱니바퀴 버튼은 대기실(view-lobby)이나 설정창 상태에서만 보이게 제한
-      if(viewId === 'view-lobby' || viewId === 'view-settings') {
-        settingsIcon.classList.remove('hidden');
-      } else {
+      if(viewId === 'view-auth') {
         settingsIcon.classList.add('hidden');
+        document.getElementById('top-rank-container').classList.add('hidden');
+        document.getElementById('my-stats-container').classList.add('hidden');
+      } else {
+        if(viewId === 'view-lobby' || viewId === 'view-settings') settingsIcon.classList.remove('hidden');
+        else settingsIcon.classList.add('hidden');
+        
+        document.getElementById('top-rank-container').classList.remove('hidden');
+        document.getElementById('my-stats-container').classList.remove('hidden');
       }
     }
 
@@ -253,12 +292,11 @@
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ko-KR';
-      u.rate = ttsRate;   // 설정 슬라이더 값 적용
-      u.pitch = ttsPitch; // 설정 슬라이더 값 적용
+      u.rate = ttsRate;   
+      u.pitch = ttsPitch; 
       window.speechSynthesis.speak(u);
     }
 
-    /* 설정 모달 컨트롤러 */
     function openSettings() {
       document.getElementById('setting-nickname').value = userNickname;
       document.getElementById('setting-tts-rate').value = ttsRate;
@@ -287,13 +325,11 @@
         ttsPitch = newPitch;
 
         try {
-          // 데이터베이스 유저 메타 정보 업데이트
           await window.dbUpdate(window.dbRef(window.fbRtdb, "users/" + currentUser.uid), {
             nickname: userNickname,
             ttsRate: ttsRate,
             ttsPitch: ttsPitch
           });
-          // 랭킹 목록에도 닉네임 동기화 갱신 트리거
           await window.dbUpdate(window.dbRef(window.fbRtdb, "rankings/" + currentUser.uid), {
             username: userNickname
           });
@@ -347,6 +383,10 @@
           barFill.style.width = '100%';
           statusBox.textContent = '답변 생성 완료';
           currentQuizIdx = 0; totalScore = 0; correctCount = 0;
+          
+          // 게임 총 시작 타임스탬프 기록
+          gamePlayStartTime = Date.now();
+          
           showView('view-game');
           renderQuiz();
           setLoading(false);
@@ -439,7 +479,6 @@
       setTimeout(renderQuiz, 800);
     }
 
-    /* 파이어베이스 로딩 확인 타이머 */
     const authCheckInterval = setInterval(() => {
       if (window.fbAuth && typeof window.fbAuth.onAuthStateChanged === 'function') {
         clearInterval(authCheckInterval);
@@ -447,7 +486,6 @@
         window.fbAuth.onAuthStateChanged(user => {
           if (user) {
             currentUser = user;
-            // 최초 로그인 시 유저 데이터 닉네임 유무 조회 및 바인딩
             const userRef = window.dbRef(window.fbRtdb, "users/" + user.uid);
             window.dbOnValue(userRef, (snapshot) => {
               if(snapshot.exists()) {
@@ -455,12 +493,18 @@
                 userNickname = uData.nickname || user.email.split('@')[0];
                 ttsRate = uData.ttsRate || 1.1;
                 ttsPitch = uData.ttsPitch || 1.0;
+                myHighScore = uData.highScore || 0;
+                myLastScore = uData.lastScore || 0;
               } else {
                 userNickname = user.email.split('@')[0];
+                myHighScore = 0;
+                myLastScore = 0;
               }
+              // 대시보드 스태츠 바인딩 호출
+              updateMyDashboardUI();
               showView('view-lobby');
               try { loadRanking(); } catch(e) { console.error(e); }
-            }, { onlyOnce: true });
+            });
 
           } else {
             currentUser = null;
@@ -469,6 +513,11 @@
         });
       }
     }, 100);
+
+    function updateMyDashboardUI() {
+      document.getElementById('my-high-txt').innerText = `${myHighScore}점`;
+      document.getElementById('my-last-txt').innerText = `${myLastScore}점`;
+    }
 
     async function handleLogin() {
       const email = document.getElementById('auth-email').value.trim();
@@ -495,27 +544,43 @@
       else { selectedSubjects = selectedSubjects.filter(s => s !== subjectName); }
     }
 
-    // 💡 [수정] 과목배열, 가공 닉네임 반영하여 Realtime DB 저장 단추 세팅
     async function endGame() {
       showView('view-result');
       document.getElementById('final-score').innerText = `${totalScore} 점`;
       document.getElementById('game-summary').innerText = `20문제 중 총 ${correctCount}문제를 맞추셨습니다!`;
 
+      // 🕒 총 소요시간 포맷 연산 (분/초)
+      const totalElapsedSec = Math.round((Date.now() - gamePlayStartTime) / 1000);
+      const m = Math.floor(totalElapsedSec / 60);
+      const s = totalElapsedSec % 60;
+      finalElapsedTimeStr = m > 0 ? `${m}분 ${s}초` : `${s}초`;
+      document.getElementById('game-duration').innerText = `총 소요 시간: ${finalElapsedTimeStr}`;
+
       if(currentUser) {
         try {
+          // 1. 랭킹 데이터 등록 (소요시간 duration 필드 신규 추가)
           await window.dbSet(window.dbRef(window.fbRtdb, "rankings/" + currentUser.uid), {
             username: userNickname,
             score: totalScore,
             negScore: -totalScore, 
             correct: correctCount,
-            subjects: selectedSubjects.join(', '), // 선택했던 과목 데이터베이스 저장
+            subjects: selectedSubjects.join(', '), 
+            duration: finalElapsedTimeStr,
             updatedAt: Date.now()
           });
-        } catch(e) { console.error("Realtime DB 점수 등록 실패:", e); }
+
+          // 2. 개인 유저 데이터 메타 정보 (최고 점수 갱신 연산 및 직전 점수 업데이트)
+          const newHighScore = Math.max(myHighScore, totalScore);
+          await window.dbUpdate(window.dbRef(window.fbRtdb, "users/" + currentUser.uid), {
+            highScore: newHighScore,
+            lastScore: totalScore,
+            nickname: userNickname
+          });
+
+        } catch(e) { console.error("Realtime DB 기록 갱신 실패:", e); }
       }
     }
 
-    // 💡 [추가] 같은 과목 조건 그대로 퀴즈만 패키징 재생성하는 버튼 바인딩 함수
     function replayGame() {
       if(selectedSubjects.length === 0) {
         alert("이전에 선택한 과목 정보가 없습니다. 로비로 이동합니다.");
@@ -525,44 +590,78 @@
       prepareGame();
     }
 
-    // 💡 랭킹 보드에 닉네임과 함께 어떤 과목을 풀어서 맞췄는지 디테일하게 렌더링
+    // 💡 [핵심 대개조] 50등까지 상단 스크롤바 바인딩 및 내 등수 서칭 동시 가동
     function loadRanking() {
       const rankRef = window.dbRef(window.fbRtdb, "rankings");
-      const q = window.dbQuery(rankRef, window.dbOrderByChild("negScore"), window.dbLimitToLast(10));
+      // 최상단은 50등까지 로드하기 위해 limitToLast(50) 지정
+      const q = window.dbQuery(rankRef, window.dbOrderByChild("negScore"), window.dbLimitToLast(50));
       
       window.dbOnValue(q, (snapshot) => {
-        const board = document.getElementById('ranking-board');
-        if(!board) return;
-        board.innerHTML = '';
+        const lowerBoard = document.getElementById('ranking-board');
+        const upperScrollBoard = document.getElementById('top-ranking-scroll');
         
-        if(!snapshot.exists()) return;
+        if(!lowerBoard || !upperScrollBoard) return;
+        
+        lowerBoard.innerHTML = '';
+        upperScrollBoard.innerHTML = '';
+        
+        if(!snapshot.exists()) {
+          upperScrollBoard.innerHTML = '<li class="scroll-item">등록된 랭킹 데이터가 없습니다.</li>';
+          return;
+        }
 
         let rankList = [];
         snapshot.forEach((childSnapshot) => {
-          rankList.push(childSnapshot.val());
+          let item = childSnapshot.val();
+          item.uid = childSnapshot.key; // 등수 서칭을 위한 고유 키 보관
+          rankList.push(item);
         });
         
+        // 내림차순 정렬
         rankList.sort((a, b) => b.score - a.score);
 
+        // 🎯 내 등수 찾기 추적 루프
+        if(currentUser) {
+          const myRankIndex = rankList.findIndex(item => item.uid === currentUser.uid);
+          if(myRankIndex !== -1) {
+            document.getElementById('my-rank-txt').innerText = `${myRankIndex + 1}위`;
+          } else {
+            document.getElementById('my-rank-txt').innerText = `순위권 외`;
+          }
+        }
+
+        // 데이터 렌더링 루프
         rankList.forEach((data, index) => {
-          const li = document.createElement('li');
-          li.className = 'ranking-item';
-          
-          const subjectTag = data.subjects ? ` [${data.subjects}]` : "";
-          
-          li.innerHTML = `
-            <div class="ranking-main">
-              <span><strong>${index + 1}위</strong>. ${data.username}</span>
-              <span><strong>${data.score}점</strong></span>
-            </div>
-            <div class="ranking-sub">
-              정답 수: ${data.correct || 0}개 / 도전과목:${subjectTag}
-            </div>
+          const subjectTag = data.subjects ? data.subjects : "전체";
+          const timeTag = data.duration ? data.duration : "기록없음";
+
+          // 1. [상단 스크롤 뷰] 1등~50등 데이터 매핑
+          const scrollLi = document.createElement('li');
+          scrollLi.className = 'scroll-item';
+          scrollLi.innerHTML = `
+            <span><strong>${index + 1}위.</strong> ${data.username}</span>
+            <span>[${subjectTag}] | ${timeTag} | <strong>${data.score}점</strong></span>
           `;
-          board.appendChild(li);
+          upperScrollBoard.appendChild(scrollLi);
+
+          // 2. [하단 결과 창 뷰] 기존 TOP 10 디자인 유지 매핑
+          if(index < 10) {
+            const lowerLi = document.createElement('li');
+            lowerLi.className = 'ranking-item';
+            lowerLi.innerHTML = `
+              <div class="ranking-main">
+                <span><strong>${index + 1}위</strong>. ${data.username}</span>
+                <span><strong>${data.score}점</strong></span>
+              </div>
+              <div class="ranking-sub">
+                정답 수: ${data.correct || 0}개 / 과목: [${subjectTag}] / 풀이시간: ${timeTag}
+              </div>
+            `;
+            lowerBoard.appendChild(lowerLi);
+          }
         });
       }, (error) => {
-        console.error("랭킹 호출 에러:", error);
+        console.error("랭킹 스트리밍 오작동:", error);
       });
     }
 
