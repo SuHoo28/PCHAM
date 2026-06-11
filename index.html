@@ -6,9 +6,8 @@
   <title>AI 스피드 퀴즈 챌린지</title>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    // 💡 Realtime Database 모듈 로드
-    import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getDatabase, ref, set, update, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     // Firebase 설정값
     const firebaseConfig = {
@@ -34,6 +33,7 @@
     
     window.dbRef = ref;
     window.dbSet = set;
+    window.dbUpdate = update;
     window.dbOnValue = onValue;
     window.dbQuery = query;
     window.dbOrderByChild = orderByChild;
@@ -50,7 +50,7 @@
     .hidden { display: none !important; }
     
     /* 입력 및 버튼 */
-    input[type="email"], input[type="password"] { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+    input[type="email"], input[type="password"], input[type="text"] { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
     .button-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
     button { border: none; border-radius: 12px; padding: 0 18px; height: 46px; font-size: 15px; cursor: pointer; transition: 0.15s; font-weight: bold; width: 100%; }
     button:hover { transform: translateY(-2px); opacity: 0.9; }
@@ -86,21 +86,28 @@
       100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
     }
 
+    /* 랭킹 스타일 디자인 개선 */
     .ranking-list { text-align: left; margin: 20px 0; padding: 0; list-style: none; }
-    .ranking-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
+    .ranking-item { display: flex; flex-direction: column; padding: 12px; border-bottom: 1px solid #eee; gap: 4px; }
+    .ranking-main { display: flex; justify-content: space-between; font-size: 16px; }
+    .ranking-sub { font-size: 12px; color: #888; text-align: left; }
     .status { min-height: 24px; color: #555; font-size: 14px; margin: 10px 0; }
     .help { margin-top: 12px; font-size: 13px; color: #777; text-align: left; line-height: 1.6; }
+
+    /* 설정창(모달) 스타일 */
+    .settings-btn { position: absolute; top: 20px; right: 20px; font-size: 24px; cursor: pointer; background: transparent; border: none; width: auto; height: auto; padding: 0; }
+    .settings-btn:hover { transform: rotate(45deg); }
+    .setting-row { margin: 16px 0; text-align: left; }
+    .setting-row label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; }
+    .setting-row input[type="range"] { width: 100%; }
   </style>
 </head>
 <body>
   <div class="container">
+    <button id="main-settings-btn" class="settings-btn hidden" onclick="openSettings()">⚙️</button>
+
     <h1>AI 스피드 퀴즈 챌린지</h1>
     <div class="subtitle">GitHub Pages + Google Apps Script + Realtime DB 연동</div>
-
-    <div class="info">
-      현재 구조: GitHub Pages 화면 → Google Apps Script 서버 → OpenAI API → 답변 반환<br />
-      <strong>데이터베이스 저장소: Firebase Realtime Database 연동 완료</strong>
-    </div>
 
     <div id="view-auth">
       <input type="email" id="auth-email" placeholder="이메일 주소">
@@ -125,6 +132,31 @@
         <button class="ask-btn" id="askBtn" onclick="prepareGame()">퀴즈 생성 및 게임 시작</button>
       </div>
       <button onclick="handleLogout()" class="secondary-btn" style="margin-top: 15px;">로그아웃</button>
+    </div>
+
+    <div id="view-settings" class="hidden">
+      <h2>⚙️ 사용자 설정</h2>
+      <hr style="margin: 15px 0; border: 0; border-top: 1px solid #ddd;">
+      
+      <div class="setting-row">
+        <label>👤 사용자 닉네임 설정</label>
+        <input type="text" id="setting-nickname" placeholder="랭킹에 표시될 닉네임">
+      </div>
+
+      <div class="setting-row">
+        <label id="label-tts-rate">🔊 TTS 말하기 속도: 1.1x</label>
+        <input type="range" id="setting-tts-rate" min="0.5" max="2.0" step="0.1" value="1.1" oninput="updateSettingLabels()">
+      </div>
+
+      <div class="setting-row">
+        <label id="label-tts-pitch">🎵 TTS 음높이(피치): 1.0</label>
+        <input type="range" id="setting-tts-pitch" min="0.5" max="1.5" step="0.1" value="1.0" oninput="updateSettingLabels()">
+      </div>
+
+      <div class="button-row" style="margin-top: 25px;">
+        <button class="clear-btn" onclick="closeSettings(false)">취소</button>
+        <button class="ask-btn" onclick="closeSettings(true)">설정 저장 및 적용</button>
+      </div>
     </div>
 
     <div id="view-loading" class="hidden">
@@ -154,12 +186,15 @@
       <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
       <h3>🏆 실시간 통합 랭킹 TOP 10</h3>
       <ul id="ranking-board" class="ranking-list"></ul>
-      <button onclick="goLobby()" style="background: #e67e22; color: white;">다시 도전하기</button>
+      
+      <div class="button-row">
+        <button onclick="replayGame()" class="ask-btn">🔄 같은 과목으로 다시 풀기</button>
+        <button onclick="goLobby()" class="clear-btn">🏠 로비(과목 선택)로 가기</button>
+      </div>
     </div>
 
     <div class="help">
-      단축키: 대기실 화면에서 Ctrl + Enter를 누르면 선택한 과목으로 게임이 바로 전송 및 시작됩니다.<br />
-      오류가 발생하면 Apps Script 배포 권한이 “모든 사용자”인지 확인하세요.
+      단축키: 대기실 화면에서 Ctrl + Enter를 누르면 선택한 과목으로 게임이 바로 전송 및 시작됩니다.
     </div>
   </div>
 
@@ -167,6 +202,7 @@
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxkJ4xGW7j1RxKWQ-8bbmGSDFQ1ia8u4DZZeFraAnaQ9lGFnrVHqb_rWVskf9eVKrN3/exec';
 
     let currentUser = null;
+    let userNickname = "";
     let selectedSubjects = [];
     let gameQuizzes = [];
     let currentQuizIdx = 0;
@@ -177,8 +213,13 @@
     let quizStartTime = 0;
     const LIMIT_TIME = 60; 
 
+    // TTS 설정 기본값 전역 변수화
+    let ttsRate = 1.1;
+    let ttsPitch = 1.0;
+
     const askBtn = document.getElementById('askBtn');
     const statusBox = document.getElementById('status');
+    const settingsIcon = document.getElementById('main-settings-btn');
 
     window.addEventListener('keydown', function(event) {
       if (event.key === 'Enter' && event.ctrlKey) {
@@ -188,10 +229,17 @@
     });
 
     function showView(viewId) {
-      ['view-auth', 'view-lobby', 'view-loading', 'view-game', 'view-result'].forEach(id => {
+      ['view-auth', 'view-lobby', 'view-settings', 'view-loading', 'view-game', 'view-result'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
       });
       document.getElementById(viewId).classList.remove('hidden');
+
+      // 톱니바퀴 버튼은 대기실(view-lobby)이나 설정창 상태에서만 보이게 제한
+      if(viewId === 'view-lobby' || viewId === 'view-settings') {
+        settingsIcon.classList.remove('hidden');
+      } else {
+        settingsIcon.classList.add('hidden');
+      }
     }
 
     function setLoading(isLoading) {
@@ -205,8 +253,53 @@
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ko-KR';
-      u.rate = 1.1; 
+      u.rate = ttsRate;   // 설정 슬라이더 값 적용
+      u.pitch = ttsPitch; // 설정 슬라이더 값 적용
       window.speechSynthesis.speak(u);
+    }
+
+    /* 설정 모달 컨트롤러 */
+    function openSettings() {
+      document.getElementById('setting-nickname').value = userNickname;
+      document.getElementById('setting-tts-rate').value = ttsRate;
+      document.getElementById('setting-tts-pitch').value = ttsPitch;
+      updateSettingLabels();
+      showView('view-settings');
+    }
+
+    function updateSettingLabels() {
+      const r = document.getElementById('setting-tts-rate').value;
+      const p = document.getElementById('setting-tts-pitch').value;
+      document.getElementById('label-tts-rate').innerText = `🔊 TTS 말하기 속도: ${r}x`;
+      document.getElementById('label-tts-pitch').innerText = `🎵 TTS 음높이(피치): ${p}`;
+    }
+
+    async function closeSettings(isSave) {
+      if(isSave && currentUser) {
+        const newNick = document.getElementById('setting-nickname').value.trim();
+        const newRate = parseFloat(document.getElementById('setting-tts-rate').value);
+        const newPitch = parseFloat(document.getElementById('setting-tts-pitch').value);
+
+        if(!newNick) { alert("닉네임을 공백으로 설정할 수 없습니다."); return; }
+        
+        userNickname = newNick;
+        ttsRate = newRate;
+        ttsPitch = newPitch;
+
+        try {
+          // 데이터베이스 유저 메타 정보 업데이트
+          await window.dbUpdate(window.dbRef(window.fbRtdb, "users/" + currentUser.uid), {
+            nickname: userNickname,
+            ttsRate: ttsRate,
+            ttsPitch: ttsPitch
+          });
+          // 랭킹 목록에도 닉네임 동기화 갱신 트리거
+          await window.dbUpdate(window.dbRef(window.fbRtdb, "rankings/" + currentUser.uid), {
+            username: userNickname
+          });
+        } catch(e) { console.error("설정 저장 실패:", e); }
+      }
+      showView('view-lobby');
     }
 
     async function prepareGame() {
@@ -346,23 +439,36 @@
       setTimeout(renderQuiz, 800);
     }
 
-    /* 💡 [수정 완료] 파이어베이스 로딩 타이밍 불일치(undefined) 해결용 무한 루프 예방 타이머 장착 */
+    /* 파이어베이스 로딩 확인 타이머 */
     const authCheckInterval = setInterval(() => {
       if (window.fbAuth && typeof window.fbAuth.onAuthStateChanged === 'function') {
-        clearInterval(authCheckInterval); // 모듈 로드가 확인되면 감시 타이머 정지
+        clearInterval(authCheckInterval);
         
         window.fbAuth.onAuthStateChanged(user => {
           if (user) {
             currentUser = user;
-            showView('view-lobby');
-            try { loadRanking(); } catch(e) { console.error("랭킹 스트리밍 지연 무시:", e); }
+            // 최초 로그인 시 유저 데이터 닉네임 유무 조회 및 바인딩
+            const userRef = window.dbRef(window.fbRtdb, "users/" + user.uid);
+            window.dbOnValue(userRef, (snapshot) => {
+              if(snapshot.exists()) {
+                const uData = snapshot.val();
+                userNickname = uData.nickname || user.email.split('@')[0];
+                ttsRate = uData.ttsRate || 1.1;
+                ttsPitch = uData.ttsPitch || 1.0;
+              } else {
+                userNickname = user.email.split('@')[0];
+              }
+              showView('view-lobby');
+              try { loadRanking(); } catch(e) { console.error(e); }
+            }, { onlyOnce: true });
+
           } else {
             currentUser = null;
             showView('view-auth');
           }
         });
       }
-    }, 100); // 0.1초마다 백그라운드에서 파이어베이스 준비 상태를 체킹
+    }, 100);
 
     async function handleLogin() {
       const email = document.getElementById('auth-email').value.trim();
@@ -389,6 +495,7 @@
       else { selectedSubjects = selectedSubjects.filter(s => s !== subjectName); }
     }
 
+    // 💡 [수정] 과목배열, 가공 닉네임 반영하여 Realtime DB 저장 단추 세팅
     async function endGame() {
       showView('view-result');
       document.getElementById('final-score').innerText = `${totalScore} 점`;
@@ -396,18 +503,29 @@
 
       if(currentUser) {
         try {
-          const nickName = currentUser.email.split('@')[0];
           await window.dbSet(window.dbRef(window.fbRtdb, "rankings/" + currentUser.uid), {
-            username: nickName,
+            username: userNickname,
             score: totalScore,
-            negScore: -totalScore, // Realtime DB 내림차순 가공 키값
+            negScore: -totalScore, 
             correct: correctCount,
+            subjects: selectedSubjects.join(', '), // 선택했던 과목 데이터베이스 저장
             updatedAt: Date.now()
           });
         } catch(e) { console.error("Realtime DB 점수 등록 실패:", e); }
       }
     }
 
+    // 💡 [추가] 같은 과목 조건 그대로 퀴즈만 패키징 재생성하는 버튼 바인딩 함수
+    function replayGame() {
+      if(selectedSubjects.length === 0) {
+        alert("이전에 선택한 과목 정보가 없습니다. 로비로 이동합니다.");
+        goLobby();
+        return;
+      }
+      prepareGame();
+    }
+
+    // 💡 랭킹 보드에 닉네임과 함께 어떤 과목을 풀어서 맞췄는지 디테일하게 렌더링
     function loadRanking() {
       const rankRef = window.dbRef(window.fbRtdb, "rankings");
       const q = window.dbQuery(rankRef, window.dbOrderByChild("negScore"), window.dbLimitToLast(10));
@@ -429,11 +547,22 @@
         rankList.forEach((data, index) => {
           const li = document.createElement('li');
           li.className = 'ranking-item';
-          li.innerHTML = `<span><strong>${index + 1}위</strong>. ${data.username}</span> <span>${data.score}점</span>`;
+          
+          const subjectTag = data.subjects ? ` [${data.subjects}]` : "";
+          
+          li.innerHTML = `
+            <div class="ranking-main">
+              <span><strong>${index + 1}위</strong>. ${data.username}</span>
+              <span><strong>${data.score}점</strong></span>
+            </div>
+            <div class="ranking-sub">
+              정답 수: ${data.correct || 0}개 / 도전과목:${subjectTag}
+            </div>
+          `;
           board.appendChild(li);
         });
       }, (error) => {
-        console.error("랭킹 호출 불가(Realtime DB 규칙 권한을 true로 적용했는지 확인하세요):", error);
+        console.error("랭킹 호출 에러:", error);
       });
     }
 
